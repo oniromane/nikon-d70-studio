@@ -1,17 +1,17 @@
-# Nikon D70 — observed over PTP, 19 Aug 2026
+# Nikon D70 — observed over PTP
 
-Read from the actual body with gphoto2 2.5.32 on macOS 26.6.1 (arm64).
+Read from a D70 with gphoto2 2.5.32 on macOS 26 (arm64), August 2026.
+Transient state (battery level, AC status) is omitted; what is listed is either
+fixed for the model or useful as a worked example of what the tree looks like.
 Full key list: `d70-config-keys.txt` — 210 entries, of which 107 are named
 and 103 are raw PTP property codes under `/main/other/`.
 
-## Identity and state at time of reading
+## What the tree reports
 
 | Key | Value |
 |---|---|
 | `/main/status/cameramodel` | D70 |
 | `/main/status/deviceversion` | **V1.02** |
-| `/main/status/batterylevel` | 25% |
-| `/main/status/acpower` | Off |
 | `/main/status/lensname` | Unknown |
 | `/main/status/minfocallength` | 0 mm |
 | `/main/status/maxfocallength` | 0 mm |

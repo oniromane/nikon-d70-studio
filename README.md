@@ -355,9 +355,9 @@ Constraints worth knowing before you rely on it: **NEF only** — not JPEG, and 
 
 ### CrossOver: what's worth trying, and what isn't
 
-You have **CrossOver 23.5** with a single `win10-64` bottle. Two facts decide this.
+Two facts decide this.
 
-**1 · The 32-bit window is closing.** CrossOver 27, announced June 2026, is Apple Silicon only and **removes 32-bit bottle support entirely**. Nikon Capture 4 is a 2004 32-bit Windows application. Your 23.5 can still create a 32-bit bottle — but it must be a *new* **Windows XP or 7 32-bit** bottle, not the `win10-64` you already have. Upgrade past CrossOver 26 and that door shuts.
+**1 · The 32-bit window is closing.** CrossOver 27, announced June 2026, is Apple Silicon only and **removes 32-bit bottle support entirely**. Nikon Capture 4 is a 2004 32-bit Windows application, so it needs a **Windows XP or 7 32-bit** bottle — a 64-bit bottle will not take it. Anything up to CrossOver 26 can still make one; past that the door shuts.
 
 **2 · It will never tether, at any version.** Wine implements the Windows API, not Windows kernel drivers, and has no generic USB passthrough. Nikon's Windows camera support is a kernel-mode driver. A perfectly-running Capture 4 under CrossOver would simply see no camera. CrossOver is for *file-based* work only — and if you truly need Windows camera software, a full VM with USB passthrough is the only path, not a compatibility layer.
 
@@ -509,7 +509,7 @@ standard library only — no pip, no npm, no build step. Five tabs:
 |---|---|
 | **Camera** | Live LCD-style readout, every writable PTP setting as a dropdown, single-shot capture, recent-frame strip |
 | **Recipes** | The ten situations from §3. One click pushes what PTP can set and lists the physical steps — mode dial, metering, CSM items — that you have to do by hand |
-| **Projects** | All 40, filterable by family and by "runs with my kit". Each pre-fills the right job with the right arguments |
+| **Projects** | All 40, filterable by family and by whether the example kit covers them. Each pre-fills the right job with the right arguments |
 | **Jobs** | Launcher for all 13 scripts with live logs, exit codes and stop buttons |
 | **Reference** | Control-panel codes, the traps table, the button combos |
 
@@ -856,25 +856,29 @@ Every accessory named in this guide, with what it costs and where it comes from.
 Prices are **rough USD estimates as of August 2026** — used-market items in
 particular swing wildly. New / used split is noted where it matters.
 
-### What you already have
+### A worked example kit
 
-| Item | What it means here |
+Rather than leave the tables abstract, the rest of this section is worked through one
+common D70-era combination — the kit zoom, a cheap telephoto and a pre-CLS flash.
+Substitute your own; the reasoning transfers.
+
+| Item | What it means |
 |---|---|
 | **AF-S DX 18–55 mm f/3.5–5.6G ED** | **52 mm** filters · 27–82 mm equivalent · **G** type, so there is no aperture ring to lock |
 | **AF 70–300 mm f/4–5.6D ED** | **62 mm** filters · 105–**450 mm** equivalent · **D** type, so the ring **must** be locked |
 | **Nikon SB-25 Speedlight** | GN 42 (m, ISO 100, 35 mm) — roughly 4× the built-in · **non-TTL only** on this body |
 
-Every filter recommendation below therefore resolves to **52 mm** or **62 mm**. Buy 62 mm and a 62→52 step-down ring (~$8) and one filter serves both lenses.
+For that pairing every filter recommendation resolves to **52 mm** or **62 mm**, so one 62 mm filter plus a 62→52 step-down ring (~$8) serves both lenses. Check the ⌀ mark on your own glass.
 
 #### The lenses
 
 Both sit on the manual's fully-supported list (p.183). The 70–300 is a **D-type AF Nikkor**, which puts it in the *top* row of the compatibility table alongside G and AF-S glass: autofocus, 3D colour matrix metering, spot metering, every exposure mode. The D70 has a built-in AF motor, so the screw-drive 70–300 autofocuses normally — that would not be true on a D40 or a D3000.
 
-The difference between your two lenses that will actually bite you: **the 70–300 has an aperture ring and the 18–55 does not.** Lock the 70–300 at its highest f/-number with the slider, or you get a blinking `FEE` and no shutter (pp.18, 184). The 18–55 is a G lens with nothing to lock.
+The difference between the two that will actually bite: **the 70–300 has an aperture ring and the 18–55 does not.** Lock the 70–300 at its highest f/-number with the slider, or you get a blinking `FEE` and no shutter (pp.18, 184). The 18–55 is a G lens with nothing to lock.
 
-At 300 mm you already have a **450 mm equivalent** (p.185), which is what makes projects 22 and 37 realistic without buying any glass.
+At 300 mm that is a **450 mm equivalent** (p.185), which is what makes projects 22 and 37 realistic without buying any glass.
 
-One thing to check yourself in five seconds: focus the 18–55 from near to far and watch the front ring. If it rotates, set your polariser **after** focusing, every time — projects 03 and 36 depend on the polariser's angle.
+Worth five seconds with any zoom: focus from near to far and watch the front ring. If it rotates, set your polariser **after** focusing, every time — projects 03 and 36 depend on the polariser's angle.
 
 #### The SB-25 — read this before you mount it
 
@@ -900,11 +904,11 @@ Two smaller ones from p.189: **auto power zoom does not work** with the SB-25, s
 
 On the 250 V hot-shoe warning on p.186 — that's aimed at third-party and studio units. The SB-25 is a Nikon Speedlight on Nikon's own compatibility list.
 
-#### What runs today, with nothing new but a card and a tripod
+#### What that kit runs with nothing more than a card and a tripod
 
 **04** turntable · **05** focus stacking · **06** observatory · **07** time-lapse · **08** bulb ramp · **09** slit-scan · **10** time-stack · **11** 1/500 ambush · **12** splash freeze · **14** light painting · **22** wide-field deep sky · **24** lens bench (you have two lenses to test) · **25** densitometry · **26** photogrammetry · **28** gigapixel (the 70–300 is exactly right) · **29** event detection · **33** stroboscopic · **38** rephotography · **39** stop-motion
 
-That's nineteen of the forty on gear you already own.
+Nineteen of the forty, on that combination alone.
 
 #### The cheapest things that unlock the most
 
@@ -916,7 +920,7 @@ That's nineteen of the forty on gear you already own.
 | **Diffraction grating film** | **$10** | Project 34 — spectroscopy |
 | **62 mm circular polariser + linear sheet** | **~$55** | Projects 03 and 36 |
 | **62 mm Hoya R72** | **~$85** | Project 21 — infrared, the D70's party trick |
-| **Baader AstroSolar sheet** | **~$35** | Project 37, and you already have the 450 mm reach for it |
+| **Baader AstroSolar sheet** | **~$35** | Project 37 — pair it with the 300 mm end |
 
 Under **$220** takes you from nineteen projects to roughly thirty. The expensive remainder — bellows, macro glass, ColorChecker, nodal head, telescope — is genuinely optional.
 
@@ -934,7 +938,7 @@ The D70 is old enough that several obvious-looking purchases are wrong.
 | Leaving the **SB-25 in TTL** | The shutter release locks — the camera fires nothing at all, and looks broken (p.188). | **A** or **M** on the flash |
 | Expecting the **SB-25 to work in Commander mode** | It predates CLS by a decade. Nothing will trigger it wirelessly from the pop-up. | $10 optical slave, SC-17 cord, or radio triggers |
 | Expecting **V OUT** to give live view | It mirrors the monitor, and the monitor is blank while you shoot. It's a playback and menu screen (§4.5). | Nothing — the D70 has no live view at all |
-| A filter in the wrong thread | Your 18–55 is **52 mm**, your 70–300 is **62 mm**. | Buy **62 mm** plus a 62→52 step-down ring (~$8) |
+| A filter in the wrong thread | Check the ⌀ mark on the lens front ring. An 18–55 kit zoom is **52 mm**; a 70–300D is **62 mm**. | Buy for the largest, add step-down rings (~$8) |
 
 Also from p.191: any filter with an exposure factor over 1× — including every C-PL and ND — should be metered **centre-weighted**, not matrix.
 

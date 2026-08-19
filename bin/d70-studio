@@ -513,7 +513,8 @@ F = {"A": "Desk", "B": "Time", "C": "Light", "D": "Optics",
      "E": "Beyond the visible", "F": "Feeding other software",
      "G": "Triggers", "H": "Physics on a tabletop", "I": "Repetition"}
 
-# runs=True → possible with an 18–55, a 70–300D, an SB-25, a card and a tripod.
+# runs=True → covered by the worked example kit in the guide: an 18–55 kit zoom,
+# a 70–300D, a pre-CLS SB-25 flash, a card and a tripod. Adjust for your own gear.
 def P(n, fam, title, recipe, runs, job=None, needs=None):
     return {"n": n, "fam": fam, "family": F[fam], "title": title,
             "recipe": recipe, "runs": runs, "job": job, "needs": needs}

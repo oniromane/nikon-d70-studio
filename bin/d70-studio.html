@@ -204,7 +204,7 @@ td:first-child,th:first-child{padding-left:0}
   <div class="filters">
     <span class="dsp" style="font-size:11px;color:var(--ink3)">Filter</span>
     <select id="f-fam" onchange="renderProjects()"><option value="">All families</option></select>
-    <label style="font-size:13px"><input type="checkbox" id="f-runs" onchange="renderProjects()" style="vertical-align:-1px"> Runs with my kit only</label>
+    <label style="font-size:13px"><input type="checkbox" id="f-runs" onchange="renderProjects()" style="vertical-align:-1px"> Example kit only</label>
     <span class="chip" id="f-count"></span>
   </div>
   <div class="grid g3" id="projects"></div>
@@ -423,7 +423,7 @@ function renderProjects(){
       acts.appendChild(b);
     }
     if(!p.runs) acts.appendChild(el('span','chip off','blocked'));
-    else acts.appendChild(el('span','chip on','runs today'));
+    else acts.appendChild(el('span','chip on','example kit'));
     c.appendChild(acts); box.appendChild(c);
   });
 }
