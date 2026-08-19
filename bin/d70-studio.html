@@ -134,6 +134,40 @@ td:first-child,th:first-child{padding-left:0}
   color:var(--ink3);display:block;margin-bottom:3px}
 .muted{color:var(--ink3)}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+
+/* ── guide ── */
+.guide{display:grid;grid-template-columns:1fr;gap:18px}
+@media(min-width:1060px){
+  .guide{grid-template-columns:248px minmax(0,1fr);gap:34px;align-items:start}
+  nav.grail{position:sticky;top:104px;max-height:calc(100vh - 150px);overflow:auto;padding-right:6px}
+}
+nav.grail input{width:100%;margin-bottom:10px}
+nav.grail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+nav.grail a{display:block;text-decoration:none;color:var(--ink3);font-size:12.5px;line-height:1.35;
+  padding:4px 8px;border-left:2px solid transparent;border-radius:0 2px 2px 0}
+nav.grail a.l3{padding-left:20px;font-size:11.5px;color:#5F6459}
+nav.grail a:hover{color:var(--ink);background:var(--panel)}
+nav.grail a.on{color:var(--accent);border-left-color:var(--accent);background:var(--panel)}
+nav.grail a.hide{display:none}
+nav.grail .none{color:var(--ink3);font-size:12px;padding:6px 8px;font-style:italic}
+
+article#gbody{max-width:78ch;padding-bottom:60px}
+#gbody h3.g-h2{font-size:19px;color:var(--ink);letter-spacing:.04em;
+  margin:44px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--rule);scroll-margin-top:110px}
+#gbody h3.g-h2:first-child{margin-top:0}
+#gbody h4{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;
+  font-size:13px;color:var(--ink2);margin:26px 0 8px;scroll-margin-top:110px}
+#gbody p{margin:0 0 13px;color:var(--ink)}
+#gbody ul,#gbody ol{margin:0 0 13px;padding-left:20px}
+#gbody li{margin-bottom:5px}
+#gbody hr{border:0;border-top:1px solid var(--rule);margin:30px 0}
+#gbody a{color:var(--accent)}
+#gbody table{font-size:13px}
+#gbody .note{border-left:3px solid var(--ink3);background:var(--panel);margin:16px 0}
+#gbody .note p{margin:0;color:var(--ink2)}
+#gbody mark{background:var(--accent);color:#1a0f0d;border-radius:2px;padding:0 2px}
+.gmeta{font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:16px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head><body>
@@ -223,6 +257,16 @@ td:first-child,th:first-child{padding-left:0}
   <div id="jobs"><p class="muted">No jobs yet.</p></div>
 </section>
 
+
+<section class="tab" id="t-guide">
+  <div class="guide">
+    <nav class="grail" aria-label="Guide sections">
+      <input id="gq" type="search" placeholder="Filter sections…" oninput="filterToc()" autocomplete="off">
+      <ol id="gtoc"></ol>
+    </nav>
+    <article id="gbody"><p class="muted">Loading the guide…</p></article>
+  </div>
+</section>
 <section class="tab" id="t-ref">
   <div class="grid g2">
     <div class="card"><h3>Control-panel codes</h3><div class="scroll"><table id="codes"></table></div></div>
@@ -241,11 +285,12 @@ const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElemen
   if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e;};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const TABS=[['camera','Camera'],['recipes','Recipes'],['projects','Projects'],['jobs','Jobs'],['ref','Reference']];
+const TABS=[['camera','Camera'],['recipes','Recipes'],['projects','Projects'],['jobs','Jobs'],['ref','Reference'],['guide','Guide']];
 TABS.forEach(([id,label],i)=>{const b=el('button',i===0?'sel':'',label);
   b.onclick=()=>{document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('sel'));
     document.querySelectorAll('section.tab').forEach(x=>x.classList.remove('sel'));
-    b.classList.add('sel'); $('#t-'+id).classList.add('sel');};
+    b.classList.add('sel'); $('#t-'+id).classList.add('sel');
+    if(id==='guide') loadGuide();};
   $('#tabs').appendChild(b);});
 
 function toast(msg,title,ok){const t=el('div','toast'+(ok?' ok':''),
@@ -488,6 +533,60 @@ async function capture(){
   b.textContent='Capture frame'; refresh(true); pollFrames();
 }
 async function freePtp(){const r=await api('/api/ptpcamerad',{}); toast(r.message,'macOS',true); refresh(true);}
+
+
+// ── guide ─────────────────────────────────────────────────────────────────
+// Rendered server-side from the same README.md the repo ships, so the app and
+// the document can never drift apart.
+let GUIDE_LOADED=false;
+async function loadGuide(){
+  if(GUIDE_LOADED) return; GUIDE_LOADED=true;
+  const d=await api('/api/guide');
+  const body=$('#gbody'), toc=$('#gtoc');
+  if(!d.ok){ body.innerHTML='<p class="muted">'+esc(d.message||'guide unavailable')+'</p>'; return; }
+  body.innerHTML='<div class="gmeta">Rendered from '+esc((d.source||'').split('/').pop())+
+                 ' · '+d.toc.length+' sections</div>'+d.html;
+  // The README carries its own inline contents line for reading on GitHub.
+  // In here the sticky rail does that job, so drop the duplicate.
+  [...body.querySelectorAll('p')].slice(0,4).forEach(p=>{
+    if(/^\s*Contents\b/.test(p.textContent)) p.remove();
+  });
+  toc.innerHTML='';
+  d.toc.forEach(t=>{
+    const li=el('li'); const a=el('a',t.level===3?'l3':'',esc(t.text));
+    a.href='#'+t.id;
+    a.onclick=e=>{e.preventDefault();
+      const el2=document.getElementById(t.id);
+      if(el2) el2.scrollIntoView({behavior:'smooth',block:'start'});};
+    li.appendChild(a); toc.appendChild(li);
+  });
+  spyGuide();
+}
+
+function filterToc(){
+  const q=$('#gq').value.trim().toLowerCase();
+  let shown=0;
+  document.querySelectorAll('#gtoc a').forEach(a=>{
+    const hit=!q||a.textContent.toLowerCase().includes(q);
+    a.classList.toggle('hide',!hit); if(hit)shown++;
+  });
+  const old=$('#gtoc').querySelector('.none'); if(old)old.remove();
+  if(!shown){const p=el('div','none','no section matches'); $('#gtoc').appendChild(p);}
+}
+
+function spyGuide(){
+  const heads=[...document.querySelectorAll('#gbody h3.g-h2, #gbody h4[id]')];
+  if(!heads.length) return;
+  const links={}; document.querySelectorAll('#gtoc a').forEach(a=>links[a.getAttribute('href').slice(1)]=a);
+  const obs=new IntersectionObserver(es=>{
+    es.forEach(e=>{ if(!e.isIntersecting) return;
+      Object.values(links).forEach(a=>a.classList.remove('on'));
+      const a=links[e.target.id]; if(a){a.classList.add('on');
+        if(a.offsetParent) a.scrollIntoView({block:'nearest'});}
+    });
+  },{rootMargin:'-12% 0px -78% 0px',threshold:0});
+  heads.forEach(h=>{ if(h.id) obs.observe(h); });
+}
 
 function renderRef(){
   $('#codes').innerHTML='<thead><tr><th>Display</th><th>Meaning</th><th>Fix</th></tr></thead><tbody>'+

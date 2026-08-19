@@ -512,8 +512,15 @@ standard library only — no pip, no npm, no build step. Five tabs:
 | **Projects** | All 40, filterable by family and by whether the example kit covers them. Each pre-fills the right job with the right arguments |
 | **Jobs** | Launcher for all 13 scripts with live logs, exit codes and stop buttons |
 | **Reference** | Control-panel codes, the traps table, the button combos |
+| **Guide** | This entire document, rendered inside the app — sticky section rail, live filter, scroll-spy |
 
 Three design decisions worth knowing:
+
+**The guide lives in one place.** The Guide tab renders `README.md` at request
+time through a small stdlib markdown renderer, into the app's own CSS. There is
+no second copy of the document to drift out of date — edit this file and the app
+shows the change on next load. `build.sh` bundles the README into
+`Contents/Resources/server/` so the installed app carries it.
 
 **It discovers the config keys rather than assuming them.** The D70's PTP
 property names aren't documented anywhere I could verify, so at connect time

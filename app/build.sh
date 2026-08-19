@@ -40,6 +40,8 @@ rm -rf "$ICONSET"
 echo "==> Server payload"
 cp "$ROOT/bin/d70-studio"       "$C/Resources/server/d70-studio"
 cp "$ROOT/bin/d70-studio.html"  "$C/Resources/server/d70-studio.html"
+# the Guide tab renders this at request time — one source of truth
+cp "$ROOT/README.md"            "$C/Resources/server/README.md"
 # the scripts the job launcher shells out to
 for s in "$ROOT"/bin/d70-* "$ROOT"/bin/_d70lib.sh; do
   case "$s" in *d70-studio|*d70-studio.html) continue;; esac

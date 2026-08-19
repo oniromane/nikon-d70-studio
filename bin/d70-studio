@@ -625,6 +625,159 @@ RESETS = [
 ]
 
 
+# ─────────────────────────────────────────────────────── the guide, rendered ──
+#
+# README.md is the single source of truth. Rather than keep a second copy of the
+# guide in HTML and let the two drift, the app renders the markdown at request
+# time into the same CSS classes the rest of the interface uses.
+#
+# A deliberately small renderer: it covers exactly what the README contains —
+# headings, fenced code, pipe tables, lists, blockquotes, rules, and inline
+# code/bold/italic/links — and nothing else.
+
+import html as _html
+
+_INLINE_CODE = re.compile(r"`([^`]+)`")
+_BOLD        = re.compile(r"\*\*([^*]+)\*\*")
+_ITALIC      = re.compile(r"(?<![\*\w])\*([^*\n]+)\*(?!\*)")
+_LINK        = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
+
+def _inline(text):
+    text = _html.escape(text, quote=False)
+    stash = []
+
+    def keep(m):
+        stash.append(m.group(1))
+        return f"\x00{len(stash)-1}\x00"
+
+    text = _INLINE_CODE.sub(keep, text)
+    text = _LINK.sub(r'<a href="\2" target="_blank" rel="noreferrer">\1</a>', text)
+    text = _BOLD.sub(r"<strong>\1</strong>", text)
+    text = _ITALIC.sub(r"<em>\1</em>", text)
+    for i, code in enumerate(stash):
+        text = text.replace(f"\x00{i}\x00", f"<code>{code}</code>")
+    return text
+
+
+def _slug(text):
+    keep = [c.lower() if c.isalnum() else "-" for c in text]
+    out = "".join(keep)
+    while "--" in out:
+        out = out.replace("--", "-")
+    return out.strip("-")[:60]
+
+
+def render_markdown(md):
+    """Return (html, toc). toc is a list of {level, text, id} for h2/h3."""
+    lines = md.split("\n")
+    out, toc = [], []
+    i, n = 0, len(lines)
+
+    def close_list(stack):
+        while stack:
+            out.append(f"</{stack.pop()}>")
+
+    liststack = []
+
+    while i < n:
+        line = lines[i]
+
+        # fenced code
+        if line.startswith("```"):
+            close_list(liststack)
+            i += 1
+            buf = []
+            while i < n and not lines[i].startswith("```"):
+                buf.append(lines[i]); i += 1
+            i += 1
+            out.append("<pre><code>" + _html.escape("\n".join(buf)) + "</code></pre>")
+            continue
+
+        # pipe table: a header row followed by a |---| separator
+        if line.strip().startswith("|") and i + 1 < n and set(lines[i+1].replace("|", "").strip()) <= set("-: "):
+            close_list(liststack)
+            def cells(r):
+                r = r.strip()
+                if r.startswith("|"): r = r[1:]
+                if r.endswith("|"):   r = r[:-1]
+                return [c.strip() for c in r.split("|")]
+            head = cells(line); i += 2
+            rows = []
+            while i < n and lines[i].strip().startswith("|"):
+                rows.append(cells(lines[i])); i += 1
+            t = ['<div class="scroll"><table><thead><tr>']
+            t += [f"<th>{_inline(c)}</th>" for c in head]
+            t.append("</tr></thead><tbody>")
+            for r in rows:
+                t.append("<tr>" + "".join(f"<td>{_inline(c)}</td>" for c in r) + "</tr>")
+            t.append("</tbody></table></div>")
+            out.append("".join(t))
+            continue
+
+        # headings
+        if line.startswith("#"):
+            close_list(liststack)
+            lvl = len(line) - len(line.lstrip("#"))
+            text = line[lvl:].strip()
+            if lvl == 1:
+                i += 1; continue                      # the page already has a title
+            sid = _slug(text)
+            if lvl in (2, 3):
+                toc.append({"level": lvl, "text": re.sub(r"[*`]", "", text), "id": sid})
+            tag = {2: "h3", 3: "h4", 4: "h4", 5: "h4", 6: "h4"}[lvl]
+            cls = ' class="g-h2"' if lvl == 2 else ""
+            out.append(f'<{tag} id="{sid}"{cls}>{_inline(text)}</{tag}>')
+            i += 1; continue
+
+        # horizontal rule
+        if line.strip() in ("---", "***", "___"):
+            close_list(liststack); out.append("<hr>"); i += 1; continue
+
+        # blockquote
+        if line.startswith(">"):
+            close_list(liststack)
+            buf = []
+            while i < n and lines[i].startswith(">"):
+                buf.append(lines[i].lstrip("> ").rstrip()); i += 1
+            out.append(f'<div class="note"><p>{_inline(" ".join(buf))}</p></div>')
+            continue
+
+        # lists
+        m_ul = re.match(r"^(\s*)[-*]\s+(.*)$", line)
+        m_ol = re.match(r"^(\s*)\d+\.\s+(.*)$", line)
+        if m_ul or m_ol:
+            want = "ul" if m_ul else "ol"
+            body = (m_ul or m_ol).group(2)
+            if not liststack or liststack[-1] != want:
+                close_list(liststack)
+                out.append(f"<{want}>"); liststack.append(want)
+            out.append(f"<li>{_inline(body)}</li>")
+            i += 1; continue
+
+        if not line.strip():
+            close_list(liststack); i += 1; continue
+
+        # paragraph
+        close_list(liststack)
+        buf = [line]
+        i += 1
+        while i < n and lines[i].strip() and not re.match(r"^(#|```|>|\||\s*[-*]\s|\s*\d+\.\s|---$)", lines[i]):
+            buf.append(lines[i]); i += 1
+        out.append(f"<p>{_inline(' '.join(buf))}</p>")
+
+    close_list(liststack)
+    return "\n".join(out), toc
+
+
+def guide_source():
+    """The bundled README, or the one in the checkout when run from source."""
+    for c in (HERE / "README.md", PROJECT / "README.md"):
+        if c.is_file():
+            return c
+    return None
+
+
 # ────────────────────────────────────────────────────────────────────── http ──
 
 def jbody(handler):
@@ -687,6 +840,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/api/jobs":
             return self._send(200, {"jobs": job_view(), "busy": busy_job()})
+
+        if p == "/api/guide":
+            src = guide_source()
+            if not src:
+                return self._send(404, {"ok": False,
+                                        "message": "README.md not found beside the app"})
+            body, toc = render_markdown(src.read_text(encoding="utf-8", errors="replace"))
+            return self._send(200, {"ok": True, "html": body, "toc": toc,
+                                    "source": str(src)})
 
         if p == "/api/frames":
             return self._send(200, {"frames": recent_frames()})
