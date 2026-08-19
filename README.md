@@ -496,6 +496,48 @@ Every candidate key name Studio guesses at resolved correctly, and the tree is m
 
 One parsing detail worth knowing: `gphoto2 --get-config A --get-config B …` returns one block per key separated by a bare `END`, and **never echoes the key path** — blocks pair with requests positionally. Each block carries `Readonly:`, so write permission comes from the camera instead of being guessed.
 
+
+### Robustness
+
+The whole thing has been through a debug pass. What that found, so nobody has to
+find it again:
+
+| Bug | Effect |
+|---|---|
+| `d70-movie` passed `*.[Jj][Pp][Gg]` to ffmpeg's `-pattern_type glob` | **The script had never worked.** ffmpeg's glob has no character classes, so it got a literal filename. It also reported success regardless. Now it hands ffmpeg an ordered numbered sequence built from the shell's own glob. |
+| `d70-stack` on an empty directory | `ALL[@]: unbound variable` from bash before the friendly message could print. `set -u` treats an empty array as unbound in bash 3.2. |
+| `d70-interval abc xyz` | `abc: unbound variable` from inside `$(( ))`. Arguments are now checked as whole numbers first. |
+| `d70-onion` used `ls \| grep -v onion.jpg` | Would also have dropped a real frame whose name merely contained "onion". Replaced with a glob and an exact basename test. |
+| `POST /api/tag {"n":"abc"}` | `int()` raised and **killed the request thread** — the client got no HTTP status at all. |
+| `POST /api/card/get {"indices":"nope"}` | Same: iterating a string gave `int("n")`. |
+| `POST /api/gear {"all":"not-a-list"}` | **Silently wiped the saved gear list.** Iterating a string yields characters, none match a gear id, so the whole kit reset to defaults. |
+| `POST /api/gear {"all":[1,2,{"x":1}]}` | Unhashable dict inside a set comprehension. |
+| `/api/guide` re-rendered the README per request | ~100 ms of CPU each time. Sixty concurrent requests hung the server past two minutes. Now cached on mtime — 11× faster, and editing the README still invalidates it. |
+| `OWNED` read-modify-write was unguarded | Two concurrent gear ticks could lose one. `gear.json` is now written atomically via a temp file and rename. |
+| `JOB_SEQ` increment was unguarded | Two simultaneous job starts could collide on an id. |
+| `refresh()` parsed `--list-config` without checking it succeeded | A lost USB claim looked like "camera present but has no settings" rather than an error. |
+| `/api/frame` on a file with no EXIF | Returned 404 "not found" for a file that exists. |
+| Print CSS forced the overlay visible | Printing any tab produced a blank sheet. |
+| `d70-stack noise` wrote `stacked-clean.tif` | Every other mode wrote `stacked-<mode>.tif`. Now consistent. |
+| `build.sh --nonsense` | Silently ignored the flag and built anyway. |
+
+Also added a handler-level safety net: a malformed request now returns 500 with
+the exception type rather than killing the thread and leaving the client with no
+status. `mapfile` was removed — **stock macOS ships bash 3.2**, which does not
+have it, so that code path had never run.
+
+**Verified after the pass:** shellcheck clean across all 15 shell files, no dead
+locals in either Python file, no bash-4-only syntax anywhere, HTML and JS
+balanced, 100 projects / 72 gear / 100 glossary entries with no duplicates or
+dangling references, every post-processing script producing correct output, and
+every endpoint returning a sane status for hostile input — 60 concurrent mixed
+requests in 0.50 s and 20 concurrent gear writes with no lost updates.
+
+**Still unverified, and only hardware can settle it:** everything that actually
+talks to the camera. Capture, tether, interval, bulb ramp, sweep, tagging,
+snapshots, bracketing and the card browser have been exercised only against a
+camera that answers config reads.
+
 ### `d70-studio` — the control surface
 
 ```bash

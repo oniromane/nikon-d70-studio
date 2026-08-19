@@ -222,6 +222,8 @@ def refresh(force=False):
         time.sleep(0.4)
 
         rc, out, err = gp(["--auto-detect"], timeout=20)
+        if rc != 0 and not err.strip():
+            err = "gphoto2 could not enumerate the USB bus"
         detected, model, port = False, "", ""
         for line in out.splitlines():
             if re.search(r"usb:", line):
@@ -233,8 +235,13 @@ def refresh(force=False):
                 break
 
         keys, unresolved, settings, abilities = {}, [], {}, []
+        cfg_err = ""
         if detected:
-            rc2, listing, _ = gp(["--list-config"], timeout=25)
+            rc2, listing, cerr = gp(["--list-config"], timeout=25)
+            if rc2 != 0:
+                # Distinguish "could not read the settings" from "there are none".
+                # Without this a lost USB claim looked like an empty camera.
+                cfg_err = (cerr or "could not read the configuration").strip().splitlines()[-1]
             available = [l.strip() for l in listing.splitlines() if l.strip().startswith("/")]
             leaf = {p.rsplit("/", 1)[-1]: p for p in available}
 
@@ -258,14 +265,14 @@ def refresh(force=False):
                     for n, blk in zip(names, blocks):
                         settings[n] = parse_config_block(blk)
 
-            rc4, ab, _ = gp(["--abilities"], timeout=15)
+            _, ab, _ = gp(["--abilities"], timeout=15)
             abilities = [l.strip() for l in ab.splitlines() if l.strip()]
 
     with STATE_LOCK:
         STATE.update(detected=detected, model=model, port=port, keys=keys,
                      unresolved=unresolved, settings=settings,
                      abilities=abilities, checked_at=time.time(),
-                     error="" if detected else (err.strip() or "no camera found"))
+                     error=(cfg_err if detected else (err.strip() or "no camera found")))
     return snapshot()
 
 
@@ -374,6 +381,9 @@ def busy_job():
     return None
 
 
+JOB_LOCK = threading.Lock()
+
+
 def start_job(kind, values):
     global JOB_SEQ
     spec = JOB_SPECS.get(kind)
@@ -397,8 +407,9 @@ def start_job(kind, values):
     if spec["camera"]:
         free_ptpcamerad()
 
-    JOB_SEQ += 1
-    jid = f"{kind}-{JOB_SEQ}"
+    with JOB_LOCK:
+        JOB_SEQ += 1
+        jid = f"{kind}-{JOB_SEQ}"
     logdir = ROOT / ".studio-logs"
     logdir.mkdir(parents=True, exist_ok=True)
     logpath = logdir / f"{jid}.log"
@@ -574,10 +585,11 @@ def load_gear():
 
 
 def save_gear(owned):
-    with GEAR_LOCK:
-        ROOT.mkdir(parents=True, exist_ok=True)
-        GEAR_FILE.write_text(json.dumps(
-            {"owned": sorted(owned)}, indent=2))
+    """Caller owns the locking; this just writes."""
+    ROOT.mkdir(parents=True, exist_ok=True)
+    tmp = GEAR_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"owned": sorted(owned)}, indent=2))
+    tmp.replace(GEAR_FILE)          # atomic swap: never a half-written file
 
 
 OWNED = load_gear()
@@ -645,7 +657,9 @@ def _num(txt):
 
 def job_shape(kind, values):
     """How many frames a job intends to take, and roughly how long for."""
-    g = lambda k, d=0: _num(values.get(k)) or d
+    def g(k, d=0):
+        v = _num(values.get(k))
+        return d if v is None else v          # a real 0 is not the same as absent
     if kind == "interval":
         n = int(g("frames", 0)); return n, n * g("seconds", 0)
     if kind == "bulbramp":
@@ -769,7 +783,6 @@ def frame_meta(rel):
         return None, "not found"
     if not shutil.which("exiftool"):
         return None, "exiftool not installed"
-    args = ["exiftool", "-json", "-n", "-G0:1"]
     p = subprocess.run(["exiftool", "-json", "-fast2", *[f"-{t}" for t in EXIF_TAGS],
                         str(target)], capture_output=True, text=True, timeout=25)
     try:
@@ -823,7 +836,11 @@ def tag_project(n):
     themselves at source, so a shoot stays identifiable without a naming
     convention anyone has to remember.
     """
-    proj = next((p for p in PROJECTS if p["n"] == int(n)), None)
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return False, f"project number must be a number, got {n!r}"
+    proj = next((p for p in PROJECTS if p["n"] == n), None)
     if not proj:
         return False, f"no project {n}"
     text = f"P{proj['n']:03d} {proj['title']}"[:36]
@@ -921,13 +938,18 @@ def card_fetch(indices):
         return False, "camera busy"
     dest = ROOT / "card"
     dest.mkdir(parents=True, exist_ok=True)
+    if not isinstance(indices, list):
+        return False, "indices must be a list of file numbers"
     args = []
     for i in indices:
-        args += ["--get-file", str(int(i))]
+        try:
+            args += ["--get-file", str(int(i))]
+        except (TypeError, ValueError):
+            return False, f"not a file number: {i!r}"
     if not args:
         return False, "nothing selected"
     with CAMERA_LOCK:
-        rc, out, err = gp(["--filename", str(dest / "%f.%C"), *args], timeout=300)
+        rc, _, err = gp(["--filename", str(dest / "%f.%C"), *args], timeout=300)
     if rc != 0:
         return False, (err or "download failed").strip()
     return True, f"{len(indices)} file(s) into {dest}"
@@ -1100,6 +1122,25 @@ def render_markdown(md):
     return "\n".join(out), toc
 
 
+_GUIDE_CACHE = {"mtime": None, "html": None, "toc": None, "src": None}
+
+
+def render_guide_cached(src):
+    """Render once, then serve from memory until the file changes.
+
+    Rendering the README is ~100 ms of pure CPU. Doing it per request meant a
+    handful of concurrent clients could saturate the box — found by throwing
+    sixty parallel requests at it, which hung. Keyed on mtime so editing the
+    README still shows up on the next load.
+    """
+    st = src.stat()
+    key = (str(src), st.st_mtime_ns, st.st_size)
+    if _GUIDE_CACHE["mtime"] != key:
+        html_, toc = render_markdown(src.read_text(encoding="utf-8", errors="replace"))
+        _GUIDE_CACHE.update(mtime=key, html=html_, toc=toc, src=str(src))
+    return _GUIDE_CACHE["html"], _GUIDE_CACHE["toc"]
+
+
 def guide_source():
     """The bundled README, or the one in the checkout when run from source."""
     for c in (HERE / "README.md", PROJECT / "README.md"):
@@ -1137,6 +1178,19 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    # A malformed request should return 500 and a message, never take down the
+    # thread and leave the client hanging with no status at all.
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except Exception as exc:                                # noqa: BLE001
+            try:
+                self._send(500, {"ok": False, "message": f"{type(exc).__name__}: {exc}"})
+            except Exception:                                   # noqa: BLE001
+                pass
 
     # ------------------------------------------------------------------ GET --
     def do_GET(self):
@@ -1184,7 +1238,7 @@ class Handler(BaseHTTPRequestHandler):
             if not src:
                 return self._send(404, {"ok": False,
                                         "message": "README.md not found beside the app"})
-            body, toc = render_markdown(src.read_text(encoding="utf-8", errors="replace"))
+            body, toc = render_guide_cached(src)
             return self._send(200, {"ok": True, "html": body, "toc": toc,
                                     "source": str(src)})
 
@@ -1197,9 +1251,11 @@ class Handler(BaseHTTPRequestHandler):
             rel = (q.get("path") or [""])[0]
             rows, err = frame_meta(rel)
             hist = frame_histogram(rel)
-            return self._send(200 if rows else 404,
-                              {"ok": bool(rows), "path": rel, "exif": rows or [],
-                               "hist": hist, "message": err or ""})
+            found = rows is not None            # [] is a valid answer: no EXIF
+            return self._send(200 if found else 404,
+                              {"ok": found, "path": rel, "exif": rows or [],
+                               "hist": hist,
+                               "message": err or ("" if rows else "no EXIF in this file")})
 
         if p == "/api/snapshots":
             return self._send(200, {"snapshots": snapshot_list()})
@@ -1257,19 +1313,31 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/gear":
             global OWNED
             gid = body.get("id")
-            if body.get("all") is not None:                 # bulk set
-                OWNED = {g for g in body["all"] if g in GEAR_BY_ID} | set(CORE)
-            elif gid in GEAR_BY_ID:
-                if body.get("owned"):
+            bulk = body.get("all")
+            if bulk is not None and not isinstance(bulk, list):
+                # Without this a stray string iterated to characters, matched
+                # nothing, and quietly reset the owner's whole kit list.
+                return self._send(400, {"ok": False,
+                                        "message": "'all' must be a list of gear ids"})
+            if bulk is None and not (isinstance(gid, str) and gid in GEAR_BY_ID):
+                return self._send(400, {"ok": False, "message": f"unknown gear id {gid!r}"})
+
+            # Read-modify-write under the same lock save_gear uses, so two
+            # concurrent ticks cannot lose one another's change.
+            with GEAR_LOCK:
+                if bulk is not None:
+                    # Only strings can be gear ids; a dict would be unhashable.
+                    OWNED = {g for g in bulk
+                             if isinstance(g, str) and g in GEAR_BY_ID} | set(CORE)
+                elif body.get("owned"):
                     OWNED = OWNED | {gid}
                 else:
                     OWNED = (OWNED - {gid}) | set(CORE)
-            else:
-                return self._send(400, {"ok": False, "message": f"unknown gear id {gid!r}"})
-            save_gear(OWNED)
-            return self._send(200, {"ok": True, "owned": sorted(OWNED),
-                                    "gear": gear_view(OWNED),
-                                    "projects": projects_view(OWNED)})
+                snapshot = set(OWNED)
+            save_gear(snapshot)
+            return self._send(200, {"ok": True, "owned": sorted(snapshot),
+                                    "gear": gear_view(snapshot),
+                                    "projects": projects_view(snapshot)})
 
         if p == "/api/preflight":
             return self._send(200, {"checks": preflight(body.get("kind", ""),

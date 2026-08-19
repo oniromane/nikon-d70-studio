@@ -32,8 +32,33 @@ EOF
 fi
 
 echo "${#FRAMES[@]} frames @ ${FPS}fps  ->  $OUT"
-ffmpeg -y -framerate "$FPS" -pattern_type glob -i "$DIR/*.[Jj][Pp][Gg]" \
-  -vf "deflicker=mode=pm:size=10,scale=1920:-2:flags=lanczos" \
-  -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p "$OUT"
 
-echo "Wrote $OUT"
+# ffmpeg's own -pattern_type glob does NOT understand character classes like
+# [Jj], so "*.[Jj][Pp][Gg]" reached it as a literal filename and every run
+# failed with "Error opening input file". The shell has already globbed the
+# frames correctly, so hand ffmpeg an ordered numbered sequence instead —
+# immune to glob dialects, case, and awkward characters in filenames.
+TMPD=$(mktemp -d "${TMPDIR:-/tmp}/d70movie.XXXXXX")
+cleanup() { rm -rf "$TMPD"; }
+trap cleanup EXIT
+
+i=0
+for f in "${FRAMES[@]}"; do
+  abs="$(cd "$(dirname "$f")" && pwd)/$(basename "$f")"
+  ln -s "$abs" "$TMPD/$(printf '%05d' "$i").jpg"
+  i=$((i + 1))
+done
+
+# deflicker needs at least `size` frames to average over.
+DFSIZE=10
+(( ${#FRAMES[@]} < DFSIZE )) && DFSIZE=${#FRAMES[@]}
+VF="scale=1920:-2:flags=lanczos"
+(( DFSIZE >= 3 )) && VF="deflicker=mode=pm:size=${DFSIZE},${VF}"
+
+if ffmpeg -y -loglevel error -framerate "$FPS" -i "$TMPD/%05d.jpg" \
+     -vf "$VF" -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p "$OUT"; then
+  echo "Wrote $OUT"
+else
+  echo "ffmpeg failed. Re-run without -loglevel error to see why." >&2
+  exit 1
+fi

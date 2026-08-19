@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # _d70lib.sh — shared helpers. Source it, don't run it.
 #
 # THE PTPCAMERAD RACE

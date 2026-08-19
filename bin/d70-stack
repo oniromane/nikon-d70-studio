@@ -16,6 +16,12 @@ set -euo pipefail
 
 MODE="${1:?usage: d70-stack <focus|expo|trails|noise> <dir>}"
 DIR="${2:?usage: d70-stack <focus|expo|trails|noise> <dir>}"
+
+case "$MODE" in
+  focus|expo|trails|noise) ;;
+  *) echo "Unknown mode '$MODE'. Use focus, expo, trails or noise." >&2; exit 1 ;;
+esac
+[ -d "$DIR" ] || { echo "Not a directory: $DIR" >&2; exit 1; }
 cd "$DIR"
 
 # Hugin's CLI lives inside the app bundle, not on the default PATH.
@@ -26,8 +32,10 @@ ALL=( *.tif *.tiff *.jpg *.jpeg )
 shopt -u nocaseglob
 
 # Skip our own outputs and intermediates, or a second run stacks its own results.
+# `${ALL[@]+"${ALL[@]}"}` matters: under `set -u`, bash 3.2 treats an empty
+# array as unbound and aborts before the friendly message below can print.
 IMGS=()
-for f in "${ALL[@]}"; do
+for f in ${ALL[@]+"${ALL[@]}"}; do
   case "$f" in
     as_*|stacked-*|stacked.*|onion.*) continue ;;
   esac
@@ -62,8 +70,8 @@ case "$MODE" in
   noise)
     # Mean of N identical frames: noise falls by sqrt(N). Eight ISO 1600 frames
     # land somewhere near a single clean ISO 200 exposure.
-    magick "${IMGS[@]}" -evaluate-sequence mean stacked-clean.tif
-    echo "-> $DIR/stacked-clean.tif"
+    magick "${IMGS[@]}" -evaluate-sequence mean stacked-noise.tif
+    echo "-> $DIR/stacked-noise.tif"
     ;;
   *) echo "unknown mode: $MODE"; exit 1 ;;
 esac

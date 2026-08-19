@@ -13,6 +13,11 @@ set -euo pipefail
 SECS="${1:?usage: d70-interval <seconds> <frames> [name]}"
 FRAMES="${2:?usage: d70-interval <seconds> <frames> [name]}"
 NAME="${3:-$(date +%Y%m%d-%H%M%S)}"
+
+# Validate before any arithmetic: a non-numeric argument would otherwise
+# surface as a bash "unbound variable" error from inside $(( )).
+case "$SECS" in (""|*[!0-9]*) echo "Interval seconds must be a whole number, got '$SECS'." >&2; exit 1 ;; esac
+case "$FRAMES" in (""|*[!0-9]*) echo "Frame count must be a whole number, got '$FRAMES'." >&2; exit 1 ;; esac
 ROOT="${D70_ROOT:-$HOME/Pictures/D70}"
 DEST="$ROOT/interval/$NAME"
 mkdir -p "$DEST"
@@ -41,4 +46,4 @@ gphoto2 --interval "$SECS" --frames "$FRAMES" \
         --filename "$DEST/%Y%m%d_%H%M%S_%n.%C"
 
 echo
-echo "Done. $(ls -1 "$DEST" | wc -l | tr -d ' ') files in $DEST"
+echo "Done. $(find "$DEST" -type f | wc -l | tr -d ' ') files in $DEST"

@@ -15,6 +15,11 @@ BUILD="$HERE/build"
 APP="$BUILD/D70 Studio.app"
 C="$APP/Contents"
 
+case "${1:-}" in
+  ""|--install|--notarize) ;;
+  *) echo "Unknown option '$1'. Use --install or --notarize, or no argument." >&2; exit 1 ;;
+esac
+
 command -v xcrun >/dev/null || { echo "Xcode command line tools required."; exit 1; }
 command -v magick >/dev/null || { echo "ImageMagick required (brew install imagemagick)."; exit 1; }
 

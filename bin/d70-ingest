@@ -38,6 +38,7 @@ exiftool -r -progress \
   "$SRC/DCIM"
 
 # Prefix each file with its capture timestamp; %-c disambiguates collisions.
+# shellcheck disable=SC2016  # exiftool parses this expression itself
 exiftool -r -q \
   '-FileName<${CreateDate}_%f%-c.%e' \
   -d "%Y%m%d-%H%M%S" \
@@ -45,6 +46,7 @@ exiftool -r -q \
 
 echo
 echo "==> This card's take"
+# shellcheck disable=SC2016  # exiftool's -p format string, not a shell expansion
 exiftool -r -q -q \
   -p '$CreateDate  $ExposureTime  f$FNumber  ISO$ISO  $FocalLength  $Comment' \
   -d "%H:%M:%S" "$SRC/DCIM" 2>/dev/null | tail -20

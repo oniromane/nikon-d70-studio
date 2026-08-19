@@ -37,21 +37,38 @@ echo "Open     : file://$(cd "$DIR" && pwd)/onion.html"
 echo "Ctrl-C to stop."
 echo
 
+# Newest N frames, excluding our own output. Deliberately NOT `ls | grep`:
+# that would also drop a real frame whose name merely contained "onion", and
+# it breaks on any unusual character. This globs, filters by exact basename,
+# and sorts on the mtime stat reports.
+newest_frames() {
+  local dir="$1" want="$2" f list=()
+  shopt -s nullglob nocaseglob
+  for f in "$dir"/*.jpg "$dir"/*.jpeg; do
+    [[ "$(basename "$f")" == onion.jpg ]] && continue
+    list+=( "$f" )
+  done
+  shopt -u nocaseglob nullglob
+  (( ${#list[@]} )) || return 1
+  local f2
+  for f2 in "${list[@]}"; do
+    printf '%s\t%s\n' "$(stat -f %m "$f2")" "$f2"
+  done | sort -rn | head -"$want" | cut -f2-
+}
+
 LAST=""
 while true; do
-  shopt -s nullglob nocaseglob
-  FRAMES=( "$DIR"/*.jpg )
-  shopt -u nocaseglob
-  if (( ${#FRAMES[@]} > 0 )); then
-    NEWEST=$(ls -t "$DIR"/*.[Jj][Pp][Gg] 2>/dev/null | grep -v onion.jpg | head -1 || true)
-    if [[ -n "$NEWEST" && "$NEWEST" != "$LAST" ]]; then
-      SET=$(ls -t "$DIR"/*.[Jj][Pp][Gg] 2>/dev/null | grep -v onion.jpg | head -"$N")
-      # shellcheck disable=SC2086
-      magick $SET -resize 1400x -evaluate-sequence mean "$DIR/onion.jpg.tmp" 2>/dev/null \
-        && mv "$DIR/onion.jpg.tmp" "$DIR/onion.jpg" \
-        && echo "  blended $(basename "$NEWEST")"
-      LAST="$NEWEST"
+  # Stock macOS ships bash 3.2, which has no mapfile/readarray. Read loop it is.
+  SET=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && SET+=( "$line" )
+  done < <(newest_frames "$DIR" "$N")
+  if (( ${#SET[@]} > 0 )) && [[ "${SET[0]}" != "$LAST" ]]; then
+    if magick "${SET[@]}" -resize 1400x -evaluate-sequence mean "$DIR/onion.jpg.tmp" 2>/dev/null; then
+      mv "$DIR/onion.jpg.tmp" "$DIR/onion.jpg"
+      echo "  blended $(basename "${SET[0]}") (${#SET[@]} frames)"
     fi
+    LAST="${SET[0]}"
   fi
   sleep 1
 done
