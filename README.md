@@ -383,7 +383,7 @@ The workaround is the correct workflow anyway — **shoot NEF and apply the curv
 
 ## 6. The scripts
 
-Fourteen programs in `bin/`. All write under `~/Pictures/D70` (override with `D70_ROOT`) and all release `ptpcamerad` before touching the camera.
+Fourteen programs in `bin/`, plus a native macOS app in `app/`. All write under `~/Pictures/D70` (override with `D70_ROOT`) and all release `ptpcamerad` before touching the camera.
 
 | Script | What it does |
 |---|---|
@@ -402,6 +402,48 @@ Fourteen programs in `bin/`. All write under `~/Pictures/D70` (override with `D7
 | `d70-ingest` | Card → dated library, copying, with EXIF-based naming |
 | `d70-settings` | Read, snapshot and push camera settings over PTP |
 
+
+
+### The app — no browser at all
+
+```bash
+./app/build.sh --install
+```
+
+That builds **D70 Studio.app** and puts it in `/Applications`. Own Dock icon,
+own window, own menu bar, no URL bar and no Safari involved.
+
+It is a native `NSWindow` hosting a `WKWebView` — WebKit renders the interface,
+but nothing about it behaves like a browser. The app owns the Python server as a
+child process and takes it down on quit, so there is no stray daemon left
+listening when you close the window.
+
+| Piece | Where |
+|---|---|
+| `app/D70Studio.swift` | 265 lines: window, menu, server lifecycle, port picking |
+| `app/icon.svg` | The icon, drawn as flat geometry |
+| `app/build.sh` | Icon → `.icns`, compile, bundle, ad-hoc sign, install |
+
+The whole thing is self-contained: `Contents/Resources/server/` holds the Python
+server, the HTML and all fourteen scripts, so the bundle runs from anywhere and
+does not depend on this checkout.
+
+**Menu items worth knowing:** `⌘R` reload · `⇧⌘R` restart the camera server ·
+`⌘K` release ptpcamerad · `⌃⌘F` full screen.
+
+Two things the build has to handle that are easy to miss:
+
+* **A GUI app launched from Finder gets a minimal `PATH`** with no
+  `/opt/homebrew/bin` in it, so `gphoto2`, `exiftool`, `magick` and `ffmpeg`
+  would all be invisible. The Swift shell injects Homebrew and
+  `/Applications/Hugin/tools_mac` into the child environment.
+* **librsvg in this ImageMagick build renders SVG gradients as solid black.**
+  The icon is deliberately flat-filled for that reason — if you edit
+  `icon.svg`, keep it to solid fills and check the output rather than trusting it.
+
+The bundle is **ad-hoc signed** (`codesign -s -`), which is enough to run
+locally. It is not notarised, so moving it to another Mac will raise Gatekeeper
+the same way the Hugin binaries did.
 
 ### What the camera actually reports
 

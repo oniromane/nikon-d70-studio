@@ -11,3 +11,6 @@ as_*.tif
 stacked-*.tif
 *-timestrip.png
 *-[0-9]*fps.mp4
+
+# built app bundle
+app/build/
