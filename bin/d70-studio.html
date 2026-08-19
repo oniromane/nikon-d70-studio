@@ -217,6 +217,93 @@ article#gbody{max-width:78ch;padding-bottom:60px}
 .tcat{font-family:var(--display);text-transform:uppercase;letter-spacing:.09em;font-size:10.5px;
   color:var(--accent);margin:26px 0 6px}
 .tcat.hide{display:none}
+
+/* ── overlay (pre-flight, frame inspector) ── */
+.ovl{position:fixed;inset:0;z-index:80;background:#0a0b09e8;display:none;
+  align-items:center;justify-content:center;padding:24px}
+.ovl.on{display:flex}
+.sheet{background:var(--panel);border:1px solid var(--rule);border-radius:5px;
+  max-width:1100px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px #000a}
+.sheet .sh{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--rule);
+  position:sticky;top:0;background:var(--panel);z-index:2}
+.sheet .sh h3{margin:0;font-size:14px}
+.sheet .sb{padding:18px}
+.sheet .sf{display:flex;gap:8px;justify-content:flex-end;padding:14px 18px;border-top:1px solid var(--rule);
+  position:sticky;bottom:0;background:var(--panel)}
+
+/* ── pre-flight ── */
+.chk{display:grid;grid-template-columns:20px 1fr;gap:10px;padding:9px 0;border-bottom:1px dotted var(--rule)}
+.chk:last-child{border-bottom:0}
+.chk .ci{font-family:var(--mono);font-weight:700;font-size:13px;text-align:center}
+.chk.ok  .ci{color:var(--go)}
+.chk.warn .ci{color:var(--warn)}
+.chk.block .ci{color:var(--accent)}
+.chk .ct{font-size:14px}
+.chk .cw{font-size:12.5px;color:var(--ink3);margin-top:2px;line-height:1.45}
+.verdict{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;
+  font-size:11px;padding:3px 9px;border-radius:2px}
+.verdict.ok{background:var(--go-bg);color:var(--go);border:1px solid var(--go)}
+.verdict.warn{background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn)}
+.verdict.block{background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent)}
+
+/* ── frame inspector ── */
+.insp{display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:900px){.insp{grid-template-columns:minmax(0,1.5fr) 300px}}
+.insp .big{background:#0d0f0c;border:1px solid var(--rule);border-radius:3px;
+  display:grid;place-items:center;min-height:260px;overflow:hidden}
+.insp .big img{max-width:100%;max-height:60vh;display:block}
+.hist{background:#0d0f0c;border:1px solid var(--rule);border-radius:3px;padding:8px}
+.hist canvas{width:100%;height:120px;display:block}
+.clip{display:flex;gap:14px;font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:6px}
+.exif{width:100%;font-size:12.5px}
+.exif td{padding:4px 8px 4px 0;border-bottom:1px dotted var(--rule);vertical-align:top}
+.exif td:first-child{color:var(--ink3);white-space:nowrap;font-family:var(--display);
+  text-transform:uppercase;letter-spacing:.04em;font-size:10.5px}
+.frames a{position:relative}
+.frames a:hover{border-color:var(--accent)}
+
+/* ── snapshots ── */
+.snaps{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.snap{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--rule);
+  border-radius:3px;padding:4px 6px 4px 10px;font-family:var(--mono);font-size:11.5px}
+.snap button{padding:3px 8px;font-size:10px}
+
+/* ── unified search ── */
+.srch{position:relative}
+.srch input{width:230px}
+.sres{position:absolute;right:0;top:32px;z-index:70;width:440px;max-height:60vh;overflow:auto;
+  background:var(--panel);border:1px solid var(--rule);border-radius:4px;box-shadow:0 14px 40px #000a;display:none}
+.sres.on{display:block}
+.sres .sg{font-family:var(--display);text-transform:uppercase;letter-spacing:.09em;font-size:9.5px;
+  color:var(--ink3);padding:8px 12px 4px;border-top:1px solid var(--rule)}
+.sres .sg:first-child{border-top:0}
+.sres a{display:block;padding:6px 12px;text-decoration:none;color:var(--ink);font-size:13px;cursor:pointer}
+.sres a:hover{background:var(--panel2);color:var(--accent)}
+.sres a .sm{color:var(--ink3);font-size:12px;display:block;margin-top:1px}
+.sres .none{padding:12px;color:var(--ink3);font-size:13px}
+
+/* ── glossary cross-links ── */
+.gl{border-bottom:1px dotted var(--ink3);cursor:help}
+.gl:hover{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── printable field sheet ── */
+@media print{
+  body{background:#fff;color:#000}
+  .wrap > header.top, nav.tabs, section.tab, #toast, .ovl .sh, .ovl .sf{display:none!important}
+  .ovl{position:static;display:block!important;background:#fff;padding:0}
+  .ovl .sheet{box-shadow:none;border:0;max-height:none;background:#fff;color:#000}
+  .ovl .sb{padding:0}
+  .fieldsheet{color:#000}
+  .fieldsheet h2,.fieldsheet h3,.fieldsheet dt{color:#000}
+  .fieldsheet .strip span{background:#eee;color:#000;border-color:#999}
+  .fieldsheet table,.fieldsheet td,.fieldsheet th{border-color:#999;color:#000}
+  .fieldsheet .muted{color:#444}
+}
+.fieldsheet h2{font-family:var(--display);text-transform:uppercase;font-size:20px;margin:0 0 4px}
+.fieldsheet .fsmeta{font-family:var(--mono);font-size:11px;color:var(--ink3);margin-bottom:14px}
+.fieldsheet h3{font-size:12px;margin:18px 0 6px;color:var(--ink2)}
+.fieldsheet ul{margin:0 0 10px;padding-left:18px;font-size:13.5px}
+.fieldsheet .box{border:1px solid var(--rule);border-radius:3px;padding:10px 12px;margin:10px 0}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head><body>
@@ -230,6 +317,11 @@ article#gbody{max-width:78ch;padding-bottom:60px}
     <span class="chip" id="c-busy" hidden></span>
     <span class="spacer"></span>
     <span class="chip" id="c-tools"></span>
+    <span class="srch">
+      <input id="sq" type="search" placeholder="Search everything…" autocomplete="off"
+             oninput="searchAll()" onfocus="searchAll()">
+      <div class="sres" id="sres"></div>
+    </span>
     <button onclick="freePtp()">Free ptpcamerad</button>
     <button onclick="refresh(true)">Refresh</button>
   </div>
@@ -271,8 +363,34 @@ article#gbody{max-width:78ch;padding-bottom:60px}
     <div id="keymap" class="keymap">—</div>
   </div>
 
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card">
+      <h3>Rig snapshots</h3>
+      <p class="muted" style="font-size:13px;margin:0 0 10px">
+        Captures every writable setting as it stands now. Recipes push fixed values;
+        a snapshot remembers whatever you actually converged on.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input id="snapname" placeholder="copy stand" style="flex:1;min-width:130px">
+        <button class="p" onclick="saveSnap()">Save current</button>
+      </div>
+      <div class="snaps" id="snaps"></div>
+    </div>
+    <div class="card">
+      <h3>Quick actions</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="armBracket()">Arm 3-frame AE bracket</button>
+        <button onclick="loadCard()">Browse the card</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin:12px 0 0">
+        The camera reports a live meter reading in the panel above. It is the
+        only exposure feedback available without a viewfinder, since this body
+        has no live view.</p>
+      <div id="cardbox" style="margin-top:12px"></div>
+    </div>
+  </div>
+
   <div class="card" style="margin-top:14px">
-    <h3>Recent frames</h3>
+    <h3>Recent frames <span class="muted" style="font-family:var(--body);text-transform:none;letter-spacing:0;font-size:12.5px">— click one for its histogram and EXIF</span></h3>
     <div class="frames" id="frames"><p class="muted">Nothing captured yet.</p></div>
   </div>
 </section>
@@ -356,6 +474,16 @@ article#gbody{max-width:78ch;padding-bottom:60px}
 </section>
 
 </div>
+
+<div class="ovl" id="ovl" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <div class="sh"><h3 id="ovlTitle">—</h3><span id="ovlTag"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button onclick="closeOvl()">Close</button></div>
+    <div class="sb" id="ovlBody"></div>
+    <div class="sf" id="ovlFoot"></div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -376,9 +504,21 @@ function toast(msg,title,ok){const t=el('div','toast'+(ok?' ok':''),
   `<span class="tt">${esc(title||'')}</span>${esc(msg)}`);
   $('#toast').appendChild(t); setTimeout(()=>t.remove(),6500);}
 
+// Never throws. If the server has gone away — quit, restarted, crashed — the UI
+// should say so once, not fill the console with unhandled rejections.
+let API_DOWN=false;
 async function api(path,body){
   const opt=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{};
-  const r=await fetch(path,opt); try{return await r.json();}catch(e){return {ok:false,message:'bad response'};}}
+  try{
+    const r=await fetch(path,opt);
+    const d=await r.json();
+    if(API_DOWN){API_DOWN=false; toast('Camera server is back','app',true);}
+    return d;
+  }catch(e){
+    if(!API_DOWN){API_DOWN=true; toast('Lost the camera server. Restart it from the View menu.','app');}
+    return {ok:false, message:'server unreachable', checks:[], jobs:[], frames:[], snapshots:[], files:[]};
+  }
+}
 
 // ── boot ──────────────────────────────────────────────────────────────────
 (async function(){
@@ -396,10 +536,13 @@ async function api(path,body){
   const fam=[...new Set(BOOT.projects.map(p=>p.family))];
   fam.forEach(f=>{const o=el('option',null,esc(f)); o.value=f; $('#f-fam').appendChild(o);});
 
-  renderRecipes(); renderProjects(); renderRef(); renderKit(); renderGlossary();
+  renderRecipes(); renderProjects(); renderRef(); renderKit(); renderGlossary(); loadSnaps();
   Object.entries(BOOT.jobspecs).forEach(([k,v])=>{const o=el('option',null,esc(v.label)); o.value=k; $('#jk').appendChild(o);});
   renderJobForm();
   refresh(true); poll();
+  // Render the guide in the background so search can reach its sections before
+  // the reader ever opens that tab.
+  setTimeout(loadGuide, 400);
 })();
 
 // ── status ────────────────────────────────────────────────────────────────
@@ -547,9 +690,14 @@ function renderProjects(){
         toast('Job pre-filled from project '+p.n,'ready',true);};
       acts.appendChild(b);
     }
+    const tag=el('button','','Tag camera'); tag.title='Write this project into the camera\'s Image Comment so every frame is labelled';
+    tag.onclick=()=>tagCamera(p.n); acts.appendChild(tag);
+    const sheet=el('button','','Sheet'); sheet.title='A printable field sheet for this project';
+    sheet.onclick=()=>fieldSheet(p); acts.appendChild(sheet);
     if(!p.runs) acts.appendChild(el('span','chip off',p.missing.length+' item'+(p.missing.length===1?'':'s')+' short'));
     else acts.appendChild(el('span','chip on','ready'));
     c.appendChild(acts); box.appendChild(c);
+    crossLink(c.querySelector('.pnote'));
   });
 }
 
@@ -569,9 +717,11 @@ function renderJobForm(preset){
 async function submitJob(){
   const kind=$('#jk').value, spec=BOOT.jobspecs[kind], values={};
   spec.args.forEach(a=>{const i=$('#ja-'+a.name); if(i)values[a.name]=i.value;});
-  const r=await api('/api/job',{kind,values});
-  toast(r.message+(r.id?(' — '+r.id):''),'job',r.ok);
-  pollJobs();
+  preflightThen(kind,values,async()=>{
+    const r=await api('/api/job',{kind,values});
+    toast(r.message+(r.id?(' — '+r.id):''),'job',r.ok);
+    pollJobs();
+  });
 }
 
 async function stopJob(id){const r=await api('/api/job/stop',{id}); toast(r.message,id,r.ok); pollJobs();}
@@ -601,7 +751,8 @@ async function pollFrames(){
   if(!d.frames.length){box.innerHTML='<p class="muted">Nothing captured yet.</p>';return;}
   box.innerHTML='';
   d.frames.forEach(f=>{
-    const a=el('a'); a.href='/frame/'+encodeURI(f.path); a.target='_blank';
+    const a=el('a'); a.href='#'; a.title='Inspect — histogram and EXIF';
+    a.onclick=e=>{e.preventDefault(); inspect(f.path);};
     a.innerHTML=`<img src="/frame/${encodeURI(f.path)}" loading="lazy" alt=""><div class="fn">${esc(f.path)}</div>`;
     box.appendChild(a);
   });
@@ -615,10 +766,310 @@ async function capture(){
 async function freePtp(){const r=await api('/api/ptpcamerad',{}); toast(r.message,'macOS',true); refresh(true);}
 
 
+
+// ── overlay ───────────────────────────────────────────────────────────────
+function openOvl(title,tag,bodyHtml,footNodes){
+  $('#ovlTitle').textContent=title;
+  $('#ovlTag').innerHTML=tag||'';
+  $('#ovlBody').innerHTML=bodyHtml;
+  const f=$('#ovlFoot'); f.innerHTML='';
+  (footNodes||[]).forEach(n=>f.appendChild(n));
+  $('#ovl').classList.add('on');
+}
+function closeOvl(){$('#ovl').classList.remove('on');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeOvl();});
+$('#ovl').addEventListener('click',e=>{if(e.target.id==='ovl')closeOvl();});
+
+// ── pre-flight ────────────────────────────────────────────────────────────
+// The camera reports battery, card space, mode, focus and white balance. Not
+// checking them before a four-hour run is just choosing to find out the hard way.
+const ICON={ok:'✓',warn:'!',block:'✕',info:'i'};
+
+async function preflightThen(kind,values,go){
+  const spec=BOOT.jobspecs[kind];
+  if(!spec.camera){go();return;}
+  openOvl('Pre-flight — '+spec.label,'<span class="muted mono" style="font-size:11px">checking the camera…</span>','<p class="muted">Reading battery, card space and settings…</p>',[]);
+  const r=await api('/api/preflight',{kind,values});
+  const cs=r.checks||[];
+  const worst=cs.some(c=>c.level==='block')?'block':cs.some(c=>c.level==='warn')?'warn':'ok';
+  const body='<div>'+cs.map(c=>`<div class="chk ${c.level}"><div class="ci">${ICON[c.level]||'·'}</div>
+      <div><div class="ct">${esc(c.text)}</div>${c.why?`<div class="cw">${esc(c.why)}</div>`:''}</div></div>`).join('')+'</div>';
+  const label={ok:'clear',warn:'proceed with care',block:'blocked'}[worst];
+  const foot=[];
+  const cancel=el('button','','Cancel'); cancel.onclick=closeOvl; foot.push(cancel);
+  if(worst!=='block'){
+    const b=el('button', worst==='ok'?'g':'p', worst==='ok'?'Start':'Start anyway');
+    b.onclick=()=>{closeOvl();go();}; foot.push(b);
+  }
+  openOvl('Pre-flight — '+spec.label,`<span class="verdict ${worst}">${label}</span>`,body,foot);
+}
+
+// ── frame inspector ───────────────────────────────────────────────────────
+async function inspect(path){
+  openOvl('Frame','<span class="muted mono" style="font-size:11px">'+esc(path)+'</span>',
+          '<p class="muted">Reading metadata and building a histogram…</p>',[]);
+  const d=await api('/api/frame?path='+encodeURIComponent(path));
+  const exif=(d.exif||[]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')
+             || '<tr><td colspan="2" class="muted">'+esc(d.message||'no metadata')+'</td></tr>';
+  const body=`<div class="insp">
+      <div>
+        <div class="big"><img src="/frame/${encodeURI(path)}" alt=""></div>
+        <div class="hist" style="margin-top:12px"><canvas id="hc" width="512" height="120"></canvas>
+          <div class="clip" id="hclip"></div></div>
+      </div>
+      <div><table class="exif">${exif}</table></div>
+    </div>`;
+  const open=el('button','','Open in Preview');
+  open.onclick=()=>window.open('/frame/'+encodeURI(path),'_blank');
+  openOvl('Frame','<span class="muted mono" style="font-size:11px">'+esc(path)+'</span>',body,[open]);
+  if(d.hist) drawHist(d.hist);
+  else $('#hclip').innerHTML='<span>histogram unavailable — is ImageMagick installed?</span>';
+}
+
+function drawHist(h){
+  const c=$('#hc'); if(!c) return;
+  const ctx=c.getContext('2d'), W=c.width, H=c.height, n=h.bins, bw=W/n;
+  ctx.clearRect(0,0,W,H);
+  // faint quarter-tone grid, so you can read where the tones actually sit
+  ctx.strokeStyle='#2a2e26'; ctx.lineWidth=1;
+  for(let i=1;i<4;i++){const x=Math.round(W*i/4)+.5;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  const draw=(arr,colour)=>{
+    ctx.beginPath(); ctx.moveTo(0,H);
+    arr.forEach((v,i)=>ctx.lineTo(i*bw+bw/2, H-(v/h.peak)*(H-4)));
+    ctx.lineTo(W,H); ctx.closePath(); ctx.fillStyle=colour; ctx.fill();
+  };
+  ctx.globalCompositeOperation='lighter';
+  draw(h.r,'rgba(200,70,60,.55)'); draw(h.g,'rgba(90,180,90,.55)'); draw(h.b,'rgba(70,110,210,.55)');
+  ctx.globalCompositeOperation='source-over';
+  ctx.strokeStyle='#dfe1d9'; ctx.lineWidth=1.4; ctx.beginPath();
+  h.l.forEach((v,i)=>{const x=i*bw+bw/2, y=H-(v/h.peak)*(H-4); i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.stroke();
+  $('#hclip').innerHTML=
+    `<span>shadow clipping <strong style="color:${h.clipLow>1?'var(--warn)':'var(--ink2)'}">${h.clipLow}%</strong></span>`+
+    `<span>highlight clipping <strong style="color:${h.clipHigh>0.5?'var(--accent)':'var(--ink2)'}">${h.clipHigh}%</strong></span>`+
+    `<span class="muted">RGB filled · luma outlined</span>`;
+}
+
+// ── snapshots ─────────────────────────────────────────────────────────────
+async function loadSnaps(){
+  const d=await api('/api/snapshots'); const box=$('#snaps'); if(!box) return;
+  box.innerHTML = (d.snapshots||[]).length ? '' :
+    '<span class="muted" style="font-size:12.5px">No snapshots yet. Set the camera up how you like it, then save.</span>';
+  (d.snapshots||[]).forEach(sn=>{
+    const w=el('div','snap'); w.appendChild(el('span',null,esc(sn.name)+' <span style="color:var(--ink3)">·'+sn.count+'</span>'));
+    const l=el('button','g','Load'); l.onclick=async()=>{
+      const r=await api('/api/snapshot/load',{name:sn.name});
+      toast(r.message,'snapshot',r.ok); refresh(true);};
+    w.appendChild(l); box.appendChild(w);
+  });
+}
+async function saveSnap(){
+  const name=$('#snapname').value.trim(); if(!name){toast('Give it a name first','snapshot');return;}
+  const r=await api('/api/snapshot/save',{name,stamp:new Date().toISOString()});
+  toast(r.message,'snapshot',r.ok); $('#snapname').value=''; loadSnaps();
+}
+async function armBracket(){
+  const r=await api('/api/bracket',{count:'3',step:'2'});
+  toast(r.message,'bracketing',r.ok); refresh(true);
+}
+
+
+// ── card browser ──────────────────────────────────────────────────────────
+async function loadCard(){
+  const box=$('#cardbox'); box.innerHTML='<p class="muted" style="font-size:13px">Reading the card…</p>';
+  const d=await api('/api/card');
+  if(!d.ok){box.innerHTML='<p class="muted" style="font-size:13px">'+esc(d.message||'could not read the card')+'</p>';return;}
+  if(!d.files.length){box.innerHTML='<p class="muted" style="font-size:13px">Card is empty.</p>';return;}
+  box.innerHTML=`<div class="mono" style="font-size:11px;color:var(--ink3);margin-bottom:6px">
+      ${d.files.length} file(s) on the card</div>
+    <div id="cardlist" style="max-height:200px;overflow:auto;border:1px solid var(--rule);border-radius:3px;padding:6px"></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button onclick="cardAll(true)">Select all</button>
+      <button onclick="cardAll(false)">None</button>
+      <button class="p" onclick="cardGet()">Download selected</button>
+    </div>`;
+  const list=$('#cardlist');
+  d.files.forEach(f=>{
+    const r=el('label'); r.style.cssText='display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:11.5px;padding:2px 0';
+    r.innerHTML=`<input type="checkbox" value="${f.index}" style="accent-color:var(--go)">
+                 <span style="flex:1">${esc(f.name)}</span><span style="color:var(--ink3)">${esc(f.size)}</span>`;
+    list.appendChild(r);
+  });
+}
+function cardAll(on){document.querySelectorAll('#cardlist input').forEach(i=>i.checked=on);}
+async function cardGet(){
+  const idx=[...document.querySelectorAll('#cardlist input:checked')].map(i=>+i.value);
+  if(!idx.length){toast('Nothing selected','card');return;}
+  toast('Downloading '+idx.length+' file(s)…','card',true);
+  const r=await api('/api/card/get',{indices:idx});
+  toast(r.message,'card',r.ok); pollFrames();
+}
+
+
+// ── unified search ────────────────────────────────────────────────────────
+// One box over projects, gear, glossary and the guide's section list. Cheaper
+// than making the reader guess which of eight tabs a thing lives in.
+function goTab(id){
+  const bs=[...document.querySelectorAll('nav.tabs button')];
+  const want={camera:'Camera',recipes:'Recipes',projects:'Projects',jobs:'Jobs',
+              kit:'Kit',ref:'Reference',gloss:'Glossary',guide:'Guide'}[id];
+  const b=bs.find(x=>x.textContent===want); if(b) b.click();
+}
+
+function searchAll(){
+  const q=$('#sq').value.trim().toLowerCase(), box=$('#sres');
+  if(q.length<2){box.classList.remove('on');box.innerHTML='';return;}
+  const hit=t=>String(t||'').toLowerCase().includes(q);
+  const groups=[];
+
+  const projs=BOOT.projects.filter(p=>hit(p.title)||hit(p.note)||hit(p.family)).slice(0,8);
+  if(projs.length) groups.push(['Projects', projs.map(p=>({
+    label:String(p.n).padStart(2,'0')+' · '+p.title,
+    sub:p.family+(p.runs?' · ready':' · '+p.missing.length+' short'),
+    go:()=>{goTab('projects'); $('#f-fam').value=''; $('#f-runs').checked=false;
+            renderProjects(); highlightProject(p.n);}}))]);
+
+  const gear=BOOT.gear.filter(g=>hit(g.name)||hit(g.note)).slice(0,6);
+  if(gear.length) groups.push(['Gear', gear.map(g=>({
+    label:g.name, sub:g.price+' · '+(g.owned?'owned':'not owned'),
+    go:()=>goTab('kit')}))]);
+
+  const terms=BOOT.glossary.filter(t=>hit(t.term)||hit(t.def)).slice(0,8);
+  if(terms.length) groups.push(['Glossary', terms.map(t=>({
+    label:t.term, sub:t.def.slice(0,90)+(t.def.length>90?'…':''),
+    go:()=>{goTab('gloss'); $('#tq').value=t.term; filterTerms(null);}}))]);
+
+  // Searching only section titles would miss almost everything. Walk the
+  // rendered guide instead and report the heading each match sits under.
+  const gbody=$('#gbody');
+  if(gbody && gbody.children.length){
+    const seen=new Set(), gres=[];
+    let head=null;
+    for(const node of gbody.children){
+      if(/^H[34]$/.test(node.tagName) && node.id) head=node;
+      if(gres.length>=6) break;
+      const txt=node.textContent||'';
+      if(!hit(txt) || !head || seen.has(head.id)) continue;
+      seen.add(head.id);
+      const i=txt.toLowerCase().indexOf(q);
+      const snippet=txt.slice(Math.max(0,i-40), i+70).replace(/\s+/g,' ').trim();
+      gres.push({label:head.textContent, sub:'…'+snippet+'…',
+        go:()=>{goTab('guide'); const e=document.getElementById(head.id);
+                if(e) e.scrollIntoView({behavior:'smooth',block:'start'});}});
+    }
+    if(gres.length) groups.push(['Guide', gres]);
+  }
+
+  box.innerHTML='';
+  if(!groups.length){box.innerHTML='<div class="none">Nothing matches “'+esc(q)+'”.</div>';}
+  groups.forEach(([name,items])=>{
+    box.appendChild(el('div','sg',esc(name)));
+    items.forEach(it=>{
+      const a=el('a',null,`${esc(it.label)}<span class="sm">${esc(it.sub)}</span>`);
+      a.onclick=e=>{e.preventDefault(); box.classList.remove('on'); $('#sq').value=''; it.go();};
+      box.appendChild(a);
+    });
+  });
+  box.classList.add('on');
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.srch')) $('#sres').classList.remove('on');
+});
+
+function highlightProject(n){
+  setTimeout(()=>{
+    const cards=[...document.querySelectorAll('#projects .proj')];
+    const c=cards.find(x=>x.querySelector('.n')&&+x.querySelector('.n').textContent===n);
+    if(!c) return;
+    c.scrollIntoView({behavior:'smooth',block:'center'});
+    c.style.transition='border-color .2s'; c.style.borderColor='var(--accent)';
+    setTimeout(()=>{c.style.borderColor='';},2200);
+  },60);
+}
+
+// ── glossary cross-links ──────────────────────────────────────────────────
+// Walks text nodes only, so it can never damage the surrounding markup, and
+// links each term once per container. A beginner reading a project note should
+// not have to go looking for what "flash duration" means.
+let GLOSS_RX=null, GLOSS_MAP={};
+function buildGlossRx(){
+  if(GLOSS_RX) return;
+  const terms=BOOT.glossary.map(t=>t.term)
+    .filter(t=>t.length>3)
+    .sort((a,b)=>b.length-a.length);
+  terms.forEach(t=>GLOSS_MAP[t.toLowerCase()]=BOOT.glossary.find(x=>x.term===t).def);
+  const esc2=t=>t.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  GLOSS_RX=new RegExp('\\b('+terms.map(esc2).join('|')+')\\b','i');
+}
+
+function crossLink(root){
+  if(!root) return;
+  buildGlossRx();
+  const seen=new Set();
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{
+    acceptNode(n){
+      if(!n.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      const p=n.parentElement;
+      if(!p) return NodeFilter.FILTER_REJECT;
+      if(p.closest('a,code,pre,dt,.gl,.strip,.recipe,th')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }});
+  const targets=[]; let n;
+  while((n=walker.nextNode())) targets.push(n);
+  targets.forEach(node=>{
+    const m=GLOSS_RX.exec(node.nodeValue);
+    if(!m) return;
+    const key=m[1].toLowerCase();
+    if(seen.has(key)) return;
+    seen.add(key);
+    const before=node.nodeValue.slice(0,m.index);
+    const after=node.nodeValue.slice(m.index+m[1].length);
+    const span=document.createElement('span');
+    span.className='gl'; span.textContent=m[1];
+    span.title=GLOSS_MAP[key]||'';
+    span.onclick=()=>{goTab('gloss'); $('#tq').value=m[1]; filterTerms(null);};
+    const frag=document.createDocumentFragment();
+    if(before) frag.appendChild(document.createTextNode(before));
+    frag.appendChild(span);
+    if(after) frag.appendChild(document.createTextNode(after));
+    node.parentNode.replaceChild(frag,node);
+  });
+}
+
+// ── project actions: tag the camera, print a field sheet ───────────────────
+async function tagCamera(n){
+  const r=await api('/api/tag',{n});
+  toast(r.message,'image comment',r.ok);
+  if(r.ok) refresh(true);
+}
+
+function fieldSheet(p){
+  const gear=(p.requires||[]).map(r=>Array.isArray(r)
+      ? r.map(x=>(BOOT.gear.find(g=>g.id===x)||{name:x}).name).join(' or ')
+      : (BOOT.gear.find(g=>g.id===r)||{name:r}).name);
+  const body=`<div class="fieldsheet printme">
+    <h2>${String(p.n).padStart(2,'0')} · ${esc(p.title)}</h2>
+    <div class="fsmeta">${p.fam} · ${esc(p.family)} — Nikon D70 field sheet</div>
+    <div class="strip">${p.recipe.map(x=>`<span>${esc(x)}</span>`).join('')}</div>
+    <h3>What it is</h3><p>${esc(p.note)}</p>
+    <h3>Kit to take</h3><ul>${gear.length?gear.map(g=>`<li>${esc(g)}</li>`).join(''):'<li>Nothing beyond the basics</li>'}</ul>
+    <h3>Before you start</h3><ul>
+      <li>Mode dial and focus mode set by hand — the computer cannot turn them</li>
+      <li>White balance off Auto if this is a sequence</li>
+      <li>Battery, or the EH-5 if the run is long</li>
+      <li>Card has room — check the frame counter</li></ul>
+    <h3>Notes</h3>
+    <div class="box" style="min-height:70px"></div>
+    <div class="box" style="min-height:70px"></div>
+  </div>`;
+  const pr=el('button','p','Print'); pr.onclick=()=>window.print();
+  openOvl('Field sheet','<span class="muted mono" style="font-size:11px">project '+p.n+'</span>',body,[pr]);
+}
+
 // ── guide ─────────────────────────────────────────────────────────────────
 // Rendered server-side from the same README.md the repo ships, so the app and
 // the document can never drift apart.
-let GUIDE_LOADED=false;
+let GUIDE_LOADED=false, GUIDE_TOC=[];
 async function loadGuide(){
   if(GUIDE_LOADED) return; GUIDE_LOADED=true;
   const d=await api('/api/guide');
@@ -631,6 +1082,7 @@ async function loadGuide(){
   [...body.querySelectorAll('p')].slice(0,4).forEach(p=>{
     if(/^\s*Contents\b/.test(p.textContent)) p.remove();
   });
+  GUIDE_TOC=d.toc;
   toc.innerHTML='';
   d.toc.forEach(t=>{
     const li=el('li'); const a=el('a',t.level===3?'l3':'',esc(t.text));
@@ -640,6 +1092,7 @@ async function loadGuide(){
       if(el2) el2.scrollIntoView({behavior:'smooth',block:'start'});};
     li.appendChild(a); toc.appendChild(li);
   });
+  crossLink(body);
   spyGuide();
 }
 

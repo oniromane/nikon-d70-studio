@@ -518,6 +518,100 @@ standard library only — no pip, no npm, no build step. Five tabs:
 
 Three design decisions worth knowing:
 
+
+#### Pre-flight checks
+
+Every camera job runs a check first. The camera already reports battery level, AC
+status, remaining frames, exposure mode, focus mode, white balance and image
+review — not looking at them before a four-hour run is choosing to find out the
+hard way.
+
+| Condition | Verdict |
+|---|---|
+| Battery under 30% and a run of 120+ frames | **blocked** — it will die partway |
+| Battery under 50% on a long run | warn |
+| Card holds fewer frames than the job needs | **blocked** |
+| Card margin under 15% | warn |
+| Any auto exposure mode for a sequence | warn — it re-decides every frame |
+| Autofocus on for a sequence | warn — it hunts and shifts the framing |
+| Auto white balance for a sequence | warn — it drifts frame to frame |
+| Image review on for a long run | warn — the screen is the biggest drain |
+| Long-exposure NR on for a bulb ramp | warn — doubles each cycle, gaps the sequence |
+| No CPU lens reported | warn — no metering, no aperture control |
+| Mains connected | battery checks skipped entirely |
+
+A block cannot be overridden from the dialog; a warning gives you *Start anyway*.
+Short runs and jobs that never touch the camera are waved straight through, so it
+does not cry wolf.
+
+#### Frame inspector
+
+No live view means the loop is unavoidably shoot → look → adjust, so that loop
+should be tight. Click any frame and you get it at size, a **histogram** with the
+RGB channels filled and luma outlined over a quarter-tone grid, shadow and
+highlight **clipping percentages**, and the EXIF that produced it.
+
+The histogram is computed server-side with ImageMagick rather than in the
+browser, which means it works for **NEF as well as JPEG** — a browser cannot
+decode a 2004 Nikon raw file, but ImageMagick can.
+
+#### Project tagging
+
+The camera stamps a 36-character comment into every frame's EXIF, and typing it
+on the four-way pad is miserable. **Tag camera** on any project card writes
+`P021 Infrared with a 720 nm filter` straight into `imagecomment` over PTP, so
+frames label themselves at source and a shoot stays identifiable without a naming
+convention anyone has to remember.
+
+#### Rig snapshots
+
+Recipes push fixed values. A snapshot captures **every writable setting exactly
+as it stands**, which is more useful, because it remembers whatever you actually
+converged on. Save it as *copy stand*, restore it in one click. Stored in
+`snapshots/` beside the picture library.
+
+#### Card browser
+
+`gphoto2 --list-files` behind a list you can tick, so you can pull four frames off
+the card instead of ingesting all of it.
+
+#### Search across everything
+
+One box over projects, gear, glossary terms and the guide. The guide search walks
+the **rendered body text** rather than just section titles and reports the heading
+each match sits under, with a snippet — searching titles alone would miss almost
+everything. The guide renders in the background at startup so search can reach it
+before you ever open that tab.
+
+#### Glossary cross-links
+
+Project notes and the guide body auto-link the first mention of any glossary term
+— hover for the definition, click to jump to it. This is what the glossary was
+added for: a beginner reading project 12 shouldn't hit "flash duration" and have
+to go looking.
+
+Implemented over text nodes with a `TreeWalker`, skipping anything inside a link,
+`code`, `pre` or a heading, so it cannot damage the surrounding markup.
+
+#### Printable field sheets
+
+The app is on a desk; the camera often isn't. **Sheet** on any project prints a
+one-pager — settings strip, what it is, kit to take, a pre-flight checklist and
+two blank note boxes.
+
+#### Bracketing
+
+One button arms a 3-frame AE bracket, since the camera exposes `bracketing`,
+`bracketset`, `aebracketingcount` and `evstep` and the menu route is four levels
+deep.
+
+#### Live light meter
+
+The camera reports `/main/status/lightmeter`, shown in the readout panel. It is
+the only exposure feedback available without a viewfinder. **Unverified:** it read
+`0,0` on a body with no lens mounted, so its scale and units still need
+confirming against real hardware.
+
 **Nothing is hardcoded as "you can do this".** The Kit tab is the only input.
 Every project declares what it needs as gear IDs; the server computes whether you
 can run it from what you have ticked. So the Projects tab cannot claim you're

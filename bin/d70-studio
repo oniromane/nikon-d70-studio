@@ -629,6 +629,332 @@ def gear_view(owned):
     return rows
 
 
+# ── pre-flight ───────────────────────────────────────────────────────────────
+# The camera already reports everything needed to catch the expensive mistakes:
+# a 240-frame ramp started on a flat battery, a four-hour interval run with
+# image review on, a sequence in aperture priority that will pump brightness for
+# four hours. None of that is worth discovering afterwards.
+
+def _num(txt):
+    """Pull the first number out of something like '25%' or '0,0062s'."""
+    if txt is None:
+        return None
+    m = re.search(r"-?\d+(?:[.,]\d+)?", str(txt))
+    return float(m.group(0).replace(",", ".")) if m else None
+
+
+def job_shape(kind, values):
+    """How many frames a job intends to take, and roughly how long for."""
+    g = lambda k, d=0: _num(values.get(k)) or d
+    if kind == "interval":
+        n = int(g("frames", 0)); return n, n * g("seconds", 0)
+    if kind == "bulbramp":
+        n = int(g("frames", 0)); return n, n * 8          # ~8 s a cycle, rough
+    if kind == "sweep":
+        return len(shlex.split(values.get("values", ""))), 0
+    if kind in ("tether", "connect", "settings"):
+        return 0, 0
+    return 0, 0
+
+
+PREFLIGHT_WANTS = {
+    # kind: (setting, wanted-substring, why)
+    "interval": [("expprogram", "M",        "Any auto mode re-decides exposure every frame and the sequence pumps."),
+                 ("focusmode",  "Manual",   "Autofocus hunts between frames and shifts the framing."),
+                 ("whitebalance", "!Automatic", "Auto white balance drifts frame to frame."),
+                 ("imagereview", "Off",     "The screen is the biggest battery drain on this camera.")],
+    "bulbramp": [("expprogram", "M",        "The ramp sets the shutter itself; an auto mode will fight it."),
+                 ("focusmode",  "Manual",   "Autofocus hunts between frames."),
+                 ("whitebalance", "!Automatic", "Auto white balance drifts frame to frame."),
+                 ("longexpnr",  "Off",      "Noise reduction doubles each cycle and gaps the sequence.")],
+    "sweep":    [("expprogram", "M",        "Most settings are read-only in the scene modes and in P.")],
+}
+
+
+def preflight(kind, values):
+    """Returns a list of {level, text, why}. level: block | warn | ok | info."""
+    out = []
+    spec = JOB_SPECS.get(kind)
+    if not spec:
+        return [{"level": "block", "text": f"Unknown job {kind!r}", "why": ""}]
+
+    if not spec["camera"]:
+        return [{"level": "ok", "text": "This job never touches the camera.", "why": ""}]
+
+    held = busy_job()
+    if held:
+        out.append({"level": "block", "text": f"Camera is held by job {held}.",
+                    "why": "gphoto2 cannot share the device. Stop it first."})
+
+    cam = refresh()
+    if not cam["detected"]:
+        out.append({"level": "block", "text": "No camera detected.",
+                    "why": "Check Setup → USB → PTP, and that the cable goes straight to the Mac."})
+        return out
+
+    st = cam["settings"]
+    cur = lambda k: (st.get(k) or {}).get("current")
+    frames, seconds = job_shape(kind, values)
+
+    # --- power ---
+    batt = _num(cur("batterylevel"))
+    ac   = (cur("acpower") or "").lower().startswith("on")
+    if ac:
+        out.append({"level": "ok", "text": "Running on mains (EH-5).", "why": ""})
+    elif batt is not None:
+        long_run = frames >= 120 or seconds >= 1800
+        if batt < 30 and long_run:
+            out.append({"level": "block", "text": f"Battery {batt:.0f}% for a {frames}-frame run.",
+                        "why": "This will die partway through. Connect the EH-5 or charge first."})
+        elif batt < 50 and long_run:
+            out.append({"level": "warn", "text": f"Battery {batt:.0f}% for a {frames}-frame run.",
+                        "why": "A fresh EN-EL3 manages roughly 400 shots with normal use. Mains is safer."})
+        else:
+            out.append({"level": "ok", "text": f"Battery {batt:.0f}%.", "why": ""})
+
+    # --- room on the card ---
+    shots = _num(cur("maximumshots"))
+    if shots is not None and frames:
+        if shots < frames:
+            out.append({"level": "block", "text": f"Card holds {shots:.0f} more frames; this needs {frames}.",
+                        "why": "Offload the card, or drop to a smaller image quality."})
+        elif shots < frames * 1.15:
+            out.append({"level": "warn", "text": f"Card holds {shots:.0f}; this needs {frames}.",
+                        "why": "Almost no margin. Offload first if you can."})
+        else:
+            out.append({"level": "ok", "text": f"Card has room for {shots:.0f} frames.", "why": ""})
+
+    # --- lens ---
+    if (cur("lensname") or "").lower() in ("unknown", "", "none"):
+        out.append({"level": "warn", "text": "No CPU lens reported.",
+                    "why": "Metering and aperture control are unavailable; the panel shows F--."})
+
+    # --- the sequence-discipline checks ---
+    for key, want, why in PREFLIGHT_WANTS.get(kind, []):
+        val = cur(key)
+        if val is None:
+            continue
+        neg = want.startswith("!")
+        target = want[1:] if neg else want
+        hit = target.lower() in str(val).lower()
+        bad = hit if neg else not hit
+        if bad:
+            label = (st.get(key) or {}).get("label") or key
+            out.append({"level": "warn",
+                        "text": f"{label} is “{val}” — wanted {'anything but ' if neg else ''}{target}.",
+                        "why": why})
+
+    if not any(o["level"] in ("warn", "block") for o in out):
+        out.append({"level": "ok", "text": "Nothing looks wrong.", "why": ""})
+    return out
+
+
+# ── frame inspection ─────────────────────────────────────────────────────────
+
+EXIF_TAGS = ["DateTimeOriginal", "Model", "LensID", "LensSpec", "FocalLength",
+             "ExposureTime", "FNumber", "ISO", "ExposureProgram", "MeteringMode",
+             "WhiteBalance", "Flash", "FocusMode", "Quality", "ImageSize",
+             "ColorSpace", "Sharpness", "ToneComp", "Saturation", "HueAdjustment",
+             "ExposureCompensation", "ShutterCount", "Comment", "FileSize"]
+
+
+def frame_meta(rel):
+    """EXIF for one frame, as {label: value}, in a sensible order."""
+    target = (ROOT / rel).resolve()
+    try:
+        target.relative_to(ROOT.resolve())
+    except ValueError:
+        return None, "outside the library"
+    if not target.is_file():
+        return None, "not found"
+    if not shutil.which("exiftool"):
+        return None, "exiftool not installed"
+    args = ["exiftool", "-json", "-n", "-G0:1"]
+    p = subprocess.run(["exiftool", "-json", "-fast2", *[f"-{t}" for t in EXIF_TAGS],
+                        str(target)], capture_output=True, text=True, timeout=25)
+    try:
+        raw = json.loads(p.stdout)[0]
+    except Exception:                                           # noqa: BLE001
+        return None, "could not read metadata"
+    rows = [(t, raw[t]) for t in EXIF_TAGS if t in raw and raw[t] not in ("", None)]
+    return rows, None
+
+
+def frame_histogram(rel, bins=64):
+    """RGB + luma histogram, computed by ImageMagick so it works for NEF too."""
+    target = (ROOT / rel).resolve()
+    try:
+        target.relative_to(ROOT.resolve())
+    except ValueError:
+        return None
+    if not target.is_file() or not shutil.which("magick"):
+        return None
+    # Downsample hard: 160x160 is ample for a histogram and keeps this instant.
+    p = subprocess.run(["magick", str(target) + "[0]", "-colorspace", "sRGB",
+                        "-resize", "160x160", "-depth", "8", "RGB:-"],
+                       capture_output=True, timeout=40)
+    if p.returncode != 0 or not p.stdout:
+        return None
+    data = p.stdout
+    r = [0] * bins; g = [0] * bins; b = [0] * bins; l = [0] * bins
+    step = 256 // bins
+    for i in range(0, len(data) - 2, 3):
+        rv, gv, bv = data[i], data[i + 1], data[i + 2]
+        r[rv // step] += 1; g[gv // step] += 1; b[bv // step] += 1
+        l[int(0.2126 * rv + 0.7152 * gv + 0.0722 * bv) // step] += 1
+    n = max(1, max(max(r), max(g), max(b), max(l)))
+    clip_lo = sum(1 for i in range(0, len(data) - 2, 3)
+                  if data[i] < 2 and data[i+1] < 2 and data[i+2] < 2)
+    clip_hi = sum(1 for i in range(0, len(data) - 2, 3)
+                  if data[i] > 253 and data[i+1] > 253 and data[i+2] > 253)
+    px = max(1, len(data) // 3)
+    return {"bins": bins, "r": r, "g": g, "b": b, "l": l, "peak": n,
+            "clipLow": round(100 * clip_lo / px, 2),
+            "clipHigh": round(100 * clip_hi / px, 2)}
+
+
+# ── tagging, snapshots, the card ─────────────────────────────────────────────
+
+def tag_project(n):
+    """Write a project id into the camera's Image Comment.
+
+    The D70 stamps a 36-character comment into every frame's EXIF, and typing it
+    on the four-way pad is miserable. Setting it from here means frames tag
+    themselves at source, so a shoot stays identifiable without a naming
+    convention anyone has to remember.
+    """
+    proj = next((p for p in PROJECTS if p["n"] == int(n)), None)
+    if not proj:
+        return False, f"no project {n}"
+    text = f"P{proj['n']:03d} {proj['title']}"[:36]
+    with STATE_LOCK:
+        kc = STATE["keys"].get("imagecomment")
+        ke = STATE["keys"].get("imagecommentenable")
+    if not kc:
+        return False, "camera does not expose imagecomment (is it connected?)"
+    if busy_job():
+        return False, "camera busy"
+    with CAMERA_LOCK:
+        rc, out, err = gp(["--set-config", f"{kc}={text}"], timeout=25)
+        if rc == 0 and ke:
+            gp(["--set-config", f"{ke}=1"], timeout=20)
+    refresh(force=True)
+    if rc != 0:
+        return False, (err or out or "camera rejected the comment").strip()
+    return True, f"every frame now tagged “{text}”"
+
+
+SNAP_DIR = ROOT / "snapshots"
+
+
+def snapshot_list():
+    if not SNAP_DIR.is_dir():
+        return []
+    out = []
+    for f in sorted(SNAP_DIR.glob("*.json")):
+        try:
+            d = json.loads(f.read_text())
+            out.append({"name": f.stem, "count": len(d.get("settings", {})),
+                        "saved": d.get("saved", "")})
+        except Exception:                                       # noqa: BLE001
+            pass
+    return out
+
+
+def snapshot_save(name, stamp):
+    name = re.sub(r"[^A-Za-z0-9 _-]", "", name).strip()[:40] or "untitled"
+    cam = refresh()
+    if not cam["detected"]:
+        return False, "no camera to snapshot"
+    vals = {k: v.get("current") for k, v in cam["settings"].items()
+            if v.get("current") is not None and not v.get("readonly")}
+    SNAP_DIR.mkdir(parents=True, exist_ok=True)
+    (SNAP_DIR / f"{name}.json").write_text(json.dumps(
+        {"saved": stamp, "settings": vals}, indent=2))
+    return True, f"saved {len(vals)} settings as “{name}”"
+
+
+def snapshot_load(name):
+    f = SNAP_DIR / f"{re.sub(r'[^A-Za-z0-9 _-]', '', name)}.json"
+    if not f.is_file():
+        return False, "no such snapshot", []
+    if busy_job():
+        return False, "camera busy", []
+    want = json.loads(f.read_text()).get("settings", {})
+    applied, refused = [], []
+    with STATE_LOCK:
+        keys = dict(STATE["keys"])
+    with CAMERA_LOCK:
+        for logical, val in want.items():
+            path = keys.get(logical)
+            if not path:
+                continue
+            rc, _, _ = gp(["--set-config", f"{path}={val}"], timeout=20)
+            (applied if rc == 0 else refused).append(f"{logical}={val}")
+    refresh(force=True)
+    return True, f"{len(applied)} applied, {len(refused)} refused", refused
+
+
+def card_list():
+    """What is on the memory card, as the camera reports it."""
+    if busy_job():
+        return None, "camera busy"
+    with CAMERA_LOCK:
+        rc, out, err = gp(["--list-files"], timeout=60)
+    if rc != 0:
+        return None, (err or "could not list the card").strip()
+    files, folder = [], ""
+    for line in out.splitlines():
+        m = re.match(r"^There (?:is|are) \d+ files? in folder '([^']*)'", line)
+        if m:
+            folder = m.group(1); continue
+        m = re.match(r"^#(\d+)\s+(\S+)\s+(\S+)\s+(\S+)", line)
+        if m:
+            files.append({"index": int(m.group(1)), "name": m.group(2),
+                          "size": m.group(3), "folder": folder})
+    return files, None
+
+
+def card_fetch(indices):
+    """Pull selected frames off the card by index."""
+    if busy_job():
+        return False, "camera busy"
+    dest = ROOT / "card"
+    dest.mkdir(parents=True, exist_ok=True)
+    args = []
+    for i in indices:
+        args += ["--get-file", str(int(i))]
+    if not args:
+        return False, "nothing selected"
+    with CAMERA_LOCK:
+        rc, out, err = gp(["--filename", str(dest / "%f.%C"), *args], timeout=300)
+    if rc != 0:
+        return False, (err or "download failed").strip()
+    return True, f"{len(indices)} file(s) into {dest}"
+
+
+def arm_bracket(count="3", step="2"):
+    """Set up an auto-exposure bracket without menu diving."""
+    with STATE_LOCK:
+        keys = dict(STATE["keys"])
+    if not keys.get("bracketing"):
+        return False, "camera does not expose bracketing"
+    if busy_job():
+        return False, "camera busy"
+    seq = [("bracketset", "AE only"), ("aebracketingcount", count),
+           ("evstep", "1/3"), ("bracketing", "1")]
+    done, failed = [], []
+    with CAMERA_LOCK:
+        for logical, val in seq:
+            path = keys.get(logical)
+            if not path:
+                continue
+            rc, _, _ = gp(["--set-config", f"{path}={val}"], timeout=20)
+            (done if rc == 0 else failed).append(logical)
+    refresh(force=True)
+    return True, f"bracketing armed ({', '.join(done)})" + (f"; refused: {', '.join(failed)}" if failed else "")
+
+
 # ─────────────────────────────────────────────────────── the guide, rendered ──
 #
 # README.md is the single source of truth. Rather than keep a second copy of the
@@ -867,6 +1193,23 @@ class Handler(BaseHTTPRequestHandler):
                                     "owned": sorted(OWNED),
                                     "projects": projects_view(OWNED)})
 
+        if p == "/api/frame":
+            rel = (q.get("path") or [""])[0]
+            rows, err = frame_meta(rel)
+            hist = frame_histogram(rel)
+            return self._send(200 if rows else 404,
+                              {"ok": bool(rows), "path": rel, "exif": rows or [],
+                               "hist": hist, "message": err or ""})
+
+        if p == "/api/snapshots":
+            return self._send(200, {"snapshots": snapshot_list()})
+
+        if p == "/api/card":
+            files, err = card_list()
+            return self._send(200 if files is not None else 400,
+                              {"ok": files is not None, "files": files or [],
+                               "message": err or ""})
+
         if p == "/api/frames":
             return self._send(200, {"frames": recent_frames()})
 
@@ -927,6 +1270,32 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "owned": sorted(OWNED),
                                     "gear": gear_view(OWNED),
                                     "projects": projects_view(OWNED)})
+
+        if p == "/api/preflight":
+            return self._send(200, {"checks": preflight(body.get("kind", ""),
+                                                        body.get("values") or {})})
+
+        if p == "/api/tag":
+            ok, msg = tag_project(body.get("n"))
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg})
+
+        if p == "/api/snapshot/save":
+            ok, msg = snapshot_save(body.get("name", ""), body.get("stamp", ""))
+            return self._send(200 if ok else 400,
+                              {"ok": ok, "message": msg, "snapshots": snapshot_list()})
+
+        if p == "/api/snapshot/load":
+            ok, msg, refused = snapshot_load(body.get("name", ""))
+            return self._send(200 if ok else 400,
+                              {"ok": ok, "message": msg, "refused": refused})
+
+        if p == "/api/card/get":
+            ok, msg = card_fetch(body.get("indices") or [])
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg})
+
+        if p == "/api/bracket":
+            ok, msg = arm_bracket(str(body.get("count", "3")), str(body.get("step", "2")))
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg})
 
         if p == "/api/capture":
             ok, msg = capture_now()
