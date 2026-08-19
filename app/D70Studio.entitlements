@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <!-- Notarization requires the Hardened Runtime. The app is NOT sandboxed
+       (only the App Store requires that), so it keeps free USB and filesystem
+       access, which is the whole point of a camera control tool.
+
+       It spawns python3 as a child process. That is a separately signed
+       system binary, so it needs no exception here. Nothing is loaded into
+       this process from disk, so library validation stays on. -->
+  <key>com.apple.security.cs.allow-jit</key><false/>
+  <key>com.apple.security.cs.disable-library-validation</key><false/>
+</dict></plist>

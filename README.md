@@ -441,9 +441,49 @@ Two things the build has to handle that are easy to miss:
   The icon is deliberately flat-filled for that reason — if you edit
   `icon.svg`, keep it to solid fills and check the output rather than trusting it.
 
-The bundle is **ad-hoc signed** (`codesign -s -`), which is enough to run
-locally. It is not notarised, so moving it to another Mac will raise Gatekeeper
-the same way the Hugin binaries did.
+#### Signing and notarization
+
+The build always applies the **Hardened Runtime**, which notarization requires
+and which costs nothing locally — so the ad-hoc build exercises exactly the same
+code path as a signed one. Verified: `flags=0x10002(adhoc,runtime)`, and the app
+still spawns its Python child and serves normally under it.
+
+`build.sh` picks a **Developer ID Application** certificate out of the keychain
+automatically if one is there, and falls back to ad-hoc if not. Right now this
+machine has **zero code-signing identities**, so it signs ad-hoc and
+`spctl -a -t exec` returns `rejected` — expected, and harmless for an app you
+launch yourself.
+
+**Notarization cannot be completed from here, and not for a technical reason.**
+Apple only issues a Developer ID certificate to paid **Apple Developer Program**
+members ($99/year). There is no free path: a personal team signs for local
+development but never for distribution. It also needs an Apple ID credential,
+which belongs in your keychain and not in anyone else's hands.
+
+Everything up to that point is already done. Once you are enrolled:
+
+```bash
+# 1. Xcode → Settings → Accounts → Manage Certificates → + → Developer ID Application
+# 2. appleid.apple.com → Sign-In and Security → App-Specific Passwords
+# 3. Store it once. This command prompts for the password itself —
+#    nothing is written into this repo.
+xcrun notarytool store-credentials d70-notary \
+    --apple-id YOUR_APPLE_ID \
+    --team-id  YOUR_TEAM_ID
+
+# 4. One command from there.
+./app/build.sh --notarize
+```
+
+That target signs with the real identity and a secure timestamp, zips the bundle
+with `ditto`, submits it with `notarytool --wait`, staples the ticket, and runs
+`spctl` to confirm the verdict flipped to accepted.
+
+Entitlements live in `app/D70Studio.entitlements` and are deliberately thin. The
+app is **not sandboxed** — only the App Store requires that, and sandboxing would
+cost the free USB access the whole tool depends on. It spawns `python3`, which is
+a separately signed system binary needing no exception, and it loads nothing from
+disk into its own process, so library validation stays on.
 
 ### What the camera actually reports
 

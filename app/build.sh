@@ -3,6 +3,7 @@
 #
 #   ./app/build.sh              build into app/build/
 #   ./app/build.sh --install    build, then copy to /Applications
+#   ./app/build.sh --notarize   build, submit to Apple, staple  (needs a cert)
 #
 # Produces a self-contained bundle: the Swift shell, the Python server and the
 # HTML UI all live inside Contents/Resources, so the .app runs from anywhere.
@@ -74,9 +75,71 @@ xcrun swiftc -O -whole-module-optimization \
   -framework Cocoa -framework WebKit \
   -o "$C/MacOS/D70Studio" "$HERE/D70Studio.swift"
 
-echo "==> Sign (ad-hoc)"
-codesign --force --deep --sign - --timestamp=none "$APP"
+echo "==> Sign"
+# Prefer a real Developer ID if the keychain has one; fall back to ad-hoc.
+# Hardened Runtime goes on either way — notarization requires it, and it costs
+# nothing to run with it locally, so the ad-hoc build exercises the same path.
+# `|| true` matters: with `set -euo pipefail`, a grep that matches nothing
+# exits 1 and takes the whole script down mid-assignment.
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+            | grep "Developer ID Application" | head -1 \
+            | sed -n 's/.*"\(.*\)"/\1/p' || true)"
+
+if [[ -n "$IDENTITY" ]]; then
+  echo "    identity: $IDENTITY"
+  codesign --force --deep --options runtime --timestamp \
+           --entitlements "$HERE/D70Studio.entitlements" \
+           --sign "$IDENTITY" "$APP"
+  SIGNED_REAL=1
+else
+  echo "    no Developer ID in the keychain — signing ad-hoc"
+  echo "    (ad-hoc runs locally but can never be notarised)"
+  codesign --force --deep --options runtime --timestamp=none \
+           --entitlements "$HERE/D70Studio.entitlements" \
+           --sign - "$APP"
+  SIGNED_REAL=0
+fi
 codesign --verify --deep --strict "$APP" && echo "    signature ok"
+codesign -d --verbose=2 "$APP" 2>&1 | grep -oE "flags=[^ ]+" | sed 's/^/    /' || true
+
+if [[ "${1:-}" == "--notarize" ]]; then
+  echo "==> Notarize"
+  if [[ "$SIGNED_REAL" != "1" ]]; then
+    cat <<'HELP'
+    Cannot notarize: no "Developer ID Application" certificate in the keychain.
+
+    Apple only issues one to paid Apple Developer Program members
+    ($99/year). There is no free path — a personal team can sign for local
+    development, but not for distribution.
+
+    Once enrolled:
+      1. Xcode > Settings > Accounts > Manage Certificates > + >
+         Developer ID Application
+      2. Create an app-specific password at appleid.apple.com
+         (Sign-In and Security > App-Specific Passwords)
+      3. Store it once — this command asks for the password itself, so
+         nothing is written into this repo:
+
+         xcrun notarytool store-credentials d70-notary \
+             --apple-id YOUR_APPLE_ID \
+             --team-id  YOUR_TEAM_ID
+
+      4. Re-run:  ./app/build.sh --notarize
+HELP
+    exit 1
+  fi
+  ZIP="$BUILD/D70Studio.zip"
+  echo "    packaging"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  echo "    submitting (this waits for Apple; usually a few minutes)"
+  xcrun notarytool submit "$ZIP" --keychain-profile "d70-notary" --wait
+  echo "    stapling"
+  xcrun stapler staple "$APP"
+  xcrun stapler validate "$APP"
+  echo "    gatekeeper assessment:"
+  spctl -a -vvv -t install "$APP" 2>&1 | sed 's/^/      /'
+  rm -f "$ZIP"
+fi
 
 if [[ "${1:-}" == "--install" ]]; then
   echo "==> Install"
