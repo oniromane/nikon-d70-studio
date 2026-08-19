@@ -15,7 +15,7 @@ survey of what replaced Nikon's own software.
 [4 Wiring the Mac](#4-wiring-the-mac) ·
 [5 Replacing Nikon Capture 4](#5-replacing-nikon-capture-4) ·
 [6 The scripts](#6-the-scripts) ·
-[7 Forty projects](#7-forty-projects) ·
+[7 One hundred projects](#7-one-hundred-projects) ·
 [8 Kit list](#8-kit-list) ·
 [9 Faults and care](#9-faults-and-care) ·
 [10 Page index](#10-page-index)
@@ -512,9 +512,34 @@ standard library only — no pip, no npm, no build step. Five tabs:
 | **Projects** | All 40, filterable by family and by whether the example kit covers them. Each pre-fills the right job with the right arguments |
 | **Jobs** | Launcher for all 13 scripts with live logs, exit codes and stop buttons |
 | **Reference** | Control-panel codes, the traps table, the button combos |
+| **Kit** | Your gear inventory. Tick what you own; every project's status recomputes |
+| **Glossary** | 100 terms in plain language, for anyone without a photography background |
 | **Guide** | This entire document, rendered inside the app — sticky section rail, live filter, scroll-spy |
 
 Three design decisions worth knowing:
+
+**Nothing is hardcoded as "you can do this".** The Kit tab is the only input.
+Every project declares what it needs as gear IDs; the server computes whether you
+can run it from what you have ticked. So the Projects tab cannot claim you're
+ready for something you have no flash for, and it updates the moment you tick a
+box. Your list saves to `gear.json` beside the picture library, not inside the app
+bundle, so reinstalling never loses it.
+
+Requirements support alternatives. A telescope **or** a microscope satisfies the
+prime-focus project; an optical slave **or** an SC-17 cord gets a flash
+off-camera; a macro lens **or** a close-up dioptre is enough for oil-and-water.
+Without that the catalogue would either demand more than a project needs or
+pretend a cheaper substitute didn't exist.
+
+The Kit tab also ranks **what to buy next** by how many projects each item
+unlocks *on its own* — projects blocked by nothing else. That's a more useful
+number than a wishlist, because it tells you which single purchase changes the
+most.
+
+**A glossary for people who don't do this.** 100 terms across nine categories,
+written so that no definition depends on a term you haven't met yet, and so that
+the genuinely counter-intuitive things say so — f-numbers running backwards, the
+inverse square law, why f/22 isn't sharper than f/8.
 
 **The guide lives in one place.** The Guide tab renders `README.md` at request
 time through a small stdlib markdown renderer, into the app's own CSS. There is
@@ -588,10 +613,15 @@ exiftool -r '-Directory<${Comment}' ~/Pictures/D70/library
 
 ---
 
-## 7. Forty projects
+## 7. One hundred projects
 
-Nine families. Each one exploits something this specific camera has, or something
-the Mac can add that the camera lacks.
+Seventeen families. Each exploits something this camera has, or something the Mac
+can add that the camera lacks.
+
+The first forty are written out at length — they are the ones I worked through in
+most detail. Families **J** onwards are the same idea at shorter length: the
+setting strip, the one thing worth knowing, and what it needs. Every project's
+gear list is generated from the same table the app reads, so the two cannot drift.
 
 ### A · Desk — tethered, repeatable, controlled
 
@@ -855,13 +885,342 @@ magick $(ls -t *.JPG | head -4 | tail -r) -resize 800x -append \
        -bordercolor white -border 20 strip-$(date +%H%M%S).jpg
 ```
 
+
+### J · Lens hacks
+
+**41 · Freelensing**  
+`M` · `lens detached and tilted` · `f wide open`  
+Hold the lens a millimetre off the mount and tilt it. You get a wedge of focus across the frame and light leaks around the edges — a poor man's tilt lens. Do it lens-down and briefly: the mount is open to dust.  
+*Needs:* Vintage manual lens
+
+**42 · Custom bokeh shapes**  
+`M` · `f/1.8–2.8` · `card over the front`  
+Cut a shape into black card, tape it over the lens, and every out-of-focus highlight takes that shape. Works only near maximum aperture — stop down and the aperture blades win.  
+*Needs:* Fast prime (f/1.8 or wider)
+
+**43 · Petroleum-jelly soft filter**  
+`M` · `clear filter` · `smear the edges`  
+A thin film of vaseline on a *sacrificial* clear filter — never the lens. Leave the centre clean and the subject stays sharp inside a dissolving frame. Unrepeatable, which is the appeal.  
+*Needs:* UV-blocking filter
+
+**44 · A magnifying glass for a lens**  
+`M` · `manual focus by moving`  
+Tape a cheap loupe over a drilled body cap. Enormous aberration, a sweet spot the size of a coin, and a look no modern lens will give you.  
+*Needs:* Spare body cap, Magnifying glass / loupe, Tripod
+
+**45 · Coupled reversed lens**  
+`M` · `f/2.8 front lens` · `tele behind`  
+Mount a 50 mm backwards onto the front of a telephoto with a male-to-male ring. Magnification is roughly the tele's focal length divided by the reversed lens's — a 200 mm and a 50 mm gives 4:1.  
+*Needs:* Reversing ring, Fast prime (f/1.8 or wider), Telephoto zoom (200 mm+)
+
+**46 · Extension tubes**  
+`M` · `manual focus` · `f/8`  
+Hollow spacers, no glass, no optical penalty. They cost light rather than quality — every millimetre of extension darkens the finder, which is why you focus by moving the whole camera.  
+*Needs:* Extension tubes
+
+**47 · Anamorphic squeeze**  
+`M` · `projector lens taped on`  
+A salvaged anamorphic front element in front of a telephoto squeezes the frame horizontally. Unsqueeze in post and you get oval bokeh and horizontal flares no filter fakes convincingly.  
+*Needs:* Projector or anamorphic lens, Telephoto zoom (200 mm+)
+
+**48 · Prism and crystal-ball refraction**  
+`M` · `f/2.8–4` · `prism at the edge`  
+Hold a prism at the corner of the lens and rotate it until a reflection lands where you want it. A crystal ball inverts the scene inside itself — focus on the ball, not through it.  
+*Needs:* Prism or crystal ball, Fast prime (f/1.8 or wider)
+
+**49 · Shift for architecture**  
+`M` · `f/8` · `bellows shifted, not tilted`  
+Keep the sensor parallel to the building and shift the lens up instead of tilting the camera. Verticals stay vertical without the keystone correction that throws away pixels.  
+*Needs:* Bellows (PB-6 or similar), Tripod, Wide-angle lens
+
+**50 · Zone plate and sieve apertures**  
+`M` · `f/≈128` · `2–20 s`  
+Instead of one pinhole, many — or a set of concentric rings. A sieve gives a soft glow around highlights; a zone plate focuses by diffraction rather than refraction. Both are printable on transparency.  
+*Needs:* Spare body cap, Tripod
+
+
+### K · Shaping light cheaply
+
+**51 · A softbox from a cardboard box**  
+`M` · `f/8` · `flash inside the box`  
+Line a box with white paper, tape baking parchment over the opening, fire the flash into it. Size is what makes light soft, not price — a metre of parchment beats a small expensive modifier.  
+*Needs:* Any external flash, Optical slave shoe *or* SC-17 TTL cord, Softbox, brolly or diffusion
+
+**52 · Ring light from LED strip**  
+`M` · `f/8` · `strip round the lens`  
+A loop of LED strip on a card collar gives shadowless frontal light and a circular catchlight. Ugly for portraits, ideal for macro, coins and circuit boards.  
+*Needs:* LED panel, Clamps, arms, gaffer tape
+
+**53 · Gels and colour contrast**  
+`M` · `f/5.6` · `two lights, two gels`  
+Warm the key, cool the background, and the eye reads depth that isn't there. Gels also fix mixed lighting: match the flash to the room instead of fighting it in post.  
+*Needs:* Any external flash, Optical slave shoe *or* SC-17 TTL cord, Colour gels
+
+**54 · Snoot and grid from drinking straws**  
+`M` · `f/8` · `tight beam`  
+A bundle of black straws taped over a flash head collimates the beam into a hard circle. The cheapest way to light one thing and nothing else.  
+*Needs:* Any external flash, Snoot, grid or barn doors, Optical slave shoe *or* SC-17 TTL cord
+
+**55 · Beauty dish from a mixing bowl**  
+`M` · `f/5.6` · `bounced centre`  
+A steel bowl with a small disc blocking the direct path bounces light off the sides. Crisper than a softbox, softer than bare flash — the classic portrait quality.  
+*Needs:* Any external flash, Reflector or foam board, Clamps, arms, gaffer tape
+
+**56 · White or black from one light**  
+`M` · `f/8` · `inverse square`  
+Light falls off with the square of distance. Move the subject away from the backdrop and it goes black; light the backdrop separately and it goes white. Same room, same light, opposite results.  
+*Needs:* Any external flash, Backdrop (black and white), Optical slave shoe *or* SC-17 TTL cord
+
+**57 · Light-painting a large subject**  
+`M` · `20–30 s × N` · `composite`  
+You cannot light a barn with one flash, but you can light it in twenty passes and lighten-blend the frames. Each pass is one manageable piece of the problem.  
+*Needs:* Tripod, Bright torch / light wand, Hugin CLI (align/enfuse)
+
+**58 · Gobos and shadow play**  
+`M` · `f/5.6` · `hard source`  
+Cut a shape from card and put it between a hard light and the wall — venetian blinds, foliage, a window that isn't there. Hard light and a sharp edge are the whole technique.  
+*Needs:* Any external flash, Snoot, grid or barn doors, Clamps, arms, gaffer tape
+
+
+### L · Water, smoke, fire
+
+**59 · Water drop collisions**  
+`M` · `1/200` · `f/11` · `flash 1/32`  
+The second drop hitting the rebound column of the first is the shot. Repeatability is everything: a valve rig and a fixed delay beat reflexes every time.  
+*Needs:* Drip rig / valve, Any external flash, Optical slave shoe *or* SC-17 TTL cord, Tripod, Laser line or pointer
+
+**60 · Smoke art on black**  
+`M` · `1/200` · `f/8` · `side light`  
+One hard light from the side, flagged so none of it reaches the black background. Invert the result and the smoke turns to ink on white.  
+*Needs:* Any external flash, Snoot, grid or barn doors, Incense or fog source, Backdrop (black and white)
+
+**61 · Ink in water**  
+`M` · `1/250` · `f/8` · `backlit tank`  
+Backlight the tank through diffusion, drop ink in with a syringe, shoot continuously. Milk gives billowing clouds; ink gives filaments. Warm water speeds it up.  
+*Needs:* Tank, glass and syringes, Any external flash, LED panel, Tripod
+
+**62 · Balloon burst**  
+`M` · `bulb` · `dark` · `sound trigger`  
+The flash is the exposure, fired by the pop. Water-filled balloons hold their shape for a few milliseconds after the skin is gone — that is the frame you want.  
+*Needs:* Sound trigger, Any external flash, ML-L3 infrared remote
+
+**63 · Oil and water abstracts**  
+`M` · `f/11` · `backlit, raised dish`  
+A dish of water with oil on top, held well above a colourful backdrop so it falls out of focus. The oil beads become lenses full of colour.  
+*Needs:* Tank, glass and syringes, Macro lens *or* Close-up dioptre lens, LED panel, Tripod
+
+**64 · Fire and steel wool**  
+`M` · `15–30 s` · `f/8` · `ISO 200`  
+Spinning burning steel wool throws sparks in long arcs. **Do this on bare ground, away from anything dry, with a fire extinguisher and eye protection, and not alone.** A cheap body earns its keep here.  
+*Needs:* Tripod, Bright torch / light wand
+
+**65 · Candle and flame macro**  
+`M` · `1/125` · `f/5.6` · `ISO 400`  
+A flame is its own light source, so meter for the flame and let everything else go black. The interesting structure is in the first millimetre above the wick.  
+*Needs:* Macro lens *or* Close-up dioptre lens, Tripod, Backdrop (black and white)
+
+
+### M · The camera as scanner
+
+**66 · Scanography, upside down**  
+`M` · `f/8` · `glass sheet` · `dark room`  
+Objects on a sheet of glass with the camera below and a light above. Flowers, feathers, watch parts — everything renders on a perfectly black field because there is nothing behind it.  
+*Needs:* Copy stand or tripod arm, LED panel, Tank, glass and syringes
+
+**67 · Book and document scanning**  
+`M` · `f/8` · `ISO 200` · `V-cradle`  
+A cardboard V-cradle holds the spine open without cracking it. Two lights at 45° kill the page shine. A page every four seconds beats any flatbed.  
+*Needs:* Copy stand or tripod arm, LED panel, ML-L3 infrared remote, CF card reader (USB-C)
+
+**68 · Tileable texture library**  
+`M` · `f/8` · `flat even light`  
+Shoot brick, fabric, bark and concrete square-on with a polariser to kill specular sheen, then offset the image by half and heal the seam. Pairs with the normal-map project.  
+*Needs:* Copy stand or tripod arm, LED panel, Circular polariser, Blender
+
+**69 · Coin and stamp catalogue**  
+`M` · `f/8` · `stacked` · `ring light`  
+Focus-stacked so the whole relief is sharp, raking light from one side so the relief reads at all. Two lighting passes — flat for colour, raking for form.  
+*Needs:* Macro lens, LED panel, Macro focusing rail, Hugin CLI (align/enfuse)
+
+**70 · Herbarium plates**  
+`M` · `f/11` · `scale bar in frame`  
+A specimen, a scale bar and a colour reference in every frame. That is what separates a record from a snapshot — someone can measure and colour-match from it decades later.  
+*Needs:* Copy stand or tripod arm, LED panel, 18% grey card
+
+**71 · Reflectance Transformation Imaging**  
+`M` · `f/8` · `fixed camera` · `N light positions`  
+Thirty to fifty frames, light moved around a dome of positions, camera locked. The software then lets you relight the object interactively — you can read worn inscriptions that are invisible under any single light.  
+*Needs:* Copy stand or tripod arm, Any external flash, Optical slave shoe *or* SC-17 TTL cord, Tripod
+
+
+### N · Long time
+
+**72 · Sun paths across a season**  
+`M` · `f/8` · `same frame, months`  
+The digital cousin of solargraphy: one frame at solar noon every day, lighten-blended. The sun's arc climbs and falls across the composite and you can see the solstice happen.  
+*Needs:* Tripod, EH-5 AC adapter
+
+**73 · The analemma**  
+`M` · `same clock time` · `one year`  
+Photograph the sun at exactly the same clock time weekly for a year and it traces a figure-of-eight. Requires obsessive framing discipline and pays it back in one impossible-looking image.  
+*Needs:* Tripod, EH-5 AC adapter, Wide-angle lens
+
+**74 · A lunation**  
+`M` · `1/125` · `f/8` · `300 mm`  
+One frame of the moon a night for a month, laid out as a grid. The terminator sweeps across and the craters near it are the only ones with any relief.  
+*Needs:* Telephoto zoom (200 mm+), Tripod
+
+**75 · Shoreline and tide**  
+`M` · `fixed frame` · `twice daily`  
+Two frames a day for a season shows the tide as a waveform and the coast as a slow drift. Time-strip the sequence and the tide becomes literally a wave on the page.  
+*Needs:* Tripod, EH-5 AC adapter
+
+**76 · Plant growth**  
+`M` · `every 15 min` · `fixed WB` · `LED`  
+Constant artificial light beats daylight here — it removes the day/night flicker entirely and lets you run a clean sequence for weeks.  
+*Needs:* Tripod, EH-5 AC adapter, LED panel
+
+**77 · Decay and mould**  
+`M` · `hourly` · `sealed jar` · `LED`  
+Fruit in a sealed jar, lit continuously, one frame an hour for a fortnight. Unsettling, beautiful, and completely hands-off once running.  
+*Needs:* Tripod, EH-5 AC adapter, LED panel, Tank, glass and syringes
+
+**78 · A seasonal quartet**  
+`M` · `same frame ×4` · `one year`  
+One tree, one viewpoint, four frames — solstices and equinoxes. The smallest possible long-term project, and the one most likely to actually get finished.  
+*Needs:* Tripod
+
+
+### O · Motion and dimension
+
+**79 · Stereo pairs and wigglegrams**  
+`M` · `shift 65 mm` · `two frames`  
+Shoot, slide the camera one eye-width sideways, shoot again. Combine as a red/cyan anaglyph, or just alternate the two frames as a GIF — the wobble reads as depth with no glasses.  
+*Needs:* Macro focusing rail, Tripod
+
+**80 · One-camera bullet time**  
+`M` · `fixed subject` · `arc of positions`  
+A static subject and a camera walked around an arc gives the frozen-orbit shot without twenty bodies. Mark the floor; consistent radius matters more than consistent spacing.  
+*Needs:* Tripod, Macro focusing rail
+
+**81 · Panning studies**  
+`S` · `1/30–1/60` · `AF-C` · `continuous`  
+Track the subject, fire through the movement, keep the background streaking. A deliberately low keeper rate — shoot fifty, expect three.  
+*Needs:* Telephoto zoom (200 mm+)
+
+**82 · Zoom burst**  
+`S` · `1/8–1/30` · `zoom during exposure`  
+Turn the zoom ring while the shutter is open. Everything streaks radially from the centre except whatever sits dead centre. Works best against point lights.  
+*Needs:* Telephoto zoom (200 mm+), Tripod
+
+**83 · Kinetic camera**  
+`M` · `1/4–2 s` · `strap on`  
+Swing, spin or drag the camera during a long exposure against bright lights. The cheapest body you own is the right one for this, and the strap is not optional.  
+*Needs:* nothing beyond the basics
+
+**84 · Rotational blur**  
+`M` · `1–4 s` · `subject spinning`  
+Spin the subject instead of the camera and the background stays sharp while the object smears into a solid of revolution. Flowers and machinery both work.  
+*Needs:* Turntable / lazy susan, Tripod, LED panel *or* Neutral density filter
+
+**85 · Cinemagraph**  
+`M` · `interval` · `mask one region`  
+Take a still frame, then let one region play from the sequence — steam, water, a flag. Everything else frozen. The contrast is what sells it.  
+*Needs:* Tripod
+
+
+### P · Measurement
+
+**86 · Front- and back-focus test**  
+`M` · `f wide open` · `45° chart`  
+A ruler at 45° with a target at a known point shows whether the AF lands in front of or behind where you aimed. The D70 has no AF fine-tune, so the answer is a lens-choice fact, not a fixable one.  
+*Needs:* Focus test chart / ruler, Tripod
+
+**87 · Sensor dust map**  
+`A` · `f/22` · `defocused white wall`  
+One frame of a blank white surface at f/22, heavily contrast-boosted, shows every speck. Shoot it monthly and you can watch dust arrive — and prove a clean actually worked.  
+*Needs:* Rocket blower
+
+**88 · Shutter count and usage history**  
+`exiftool over the library`  
+The D70 records a shutter count in the maker notes. Run it across your whole library and you get an actuation history — plus which focal lengths and apertures you actually use, as opposed to think you do.  
+*Needs:* nothing beyond the basics
+
+**89 · Automated sharpness scoring**  
+`M` · `chart` · `aperture sweep` · `measure`  
+Sweep the aperture, then score each frame by the standard deviation of its Laplacian in the centre and the corners. You get a curve, not an opinion.  
+*Needs:* Resolution chart, Tripod
+
+**90 · Noise and dynamic range per ISO**  
+`M` · `fixed scene` · `ISO sweep`  
+Shoot a grey card at every ISO, measure the standard deviation of a flat patch, and you have this sensor's read-noise curve. Then you know where 'too high' actually is for this body rather than for the internet's.  
+*Needs:* Tripod, 18% grey card
+
+**91 · Measuring flash duration**  
+`M` · `dark` · `spinning disc`  
+Photograph a marked spinning disc lit only by the flash. The arc length the mark travels, against known RPM, gives you the flash's actual duration at each power setting.  
+*Needs:* Any external flash, Turntable / lazy susan, Tripod
+
+**92 · Colour constancy across sources**  
+`M` · `ColorChecker` · `every lamp`  
+The same chart under daylight, tungsten, fluorescent and LED. Compare the patch values and you can see which sources have holes in their spectrum that no white balance will fix.  
+*Needs:* ColorChecker (Classic or Mini), Tripod
+
+
+### Q · Art and print
+
+**93 · Digital negatives for cyanotype**  
+`NEF → invert → transparency`  
+Print an inverted image on transparency film, contact-print it onto cyanotype-coated paper under UV. A 6 MP file is plenty — the process resolves far less than the sensor does.  
+*Needs:* Inkjet + transparency film, 365 nm UV torch
+
+**94 · Contact sheets as the artefact**  
+`montage the take`  
+Print the whole roll, not the selects. The rejects, the framing drift and the second attempt are the record of how the picture was actually found.  
+*Needs:* CF card reader (USB-C)
+
+**95 · Photo mosaic from your own library**  
+`one image from thousands`  
+Build a target image out of the tiles of everything else you have shot. Needs a big library, which is what a decade of a cheap camera gives you.  
+*Needs:* nothing beyond the basics
+
+**96 · Databending a raw file**  
+`NEF → bytes → glitch`  
+Open the raw as bytes, corrupt some deliberately, reopen. NEF is fragile in interesting ways — the compression means one flipped byte smears colour across a whole band.  
+*Needs:* nothing beyond the basics
+
+**97 · The ghost portrait**  
+`M` · `N frames` · `mean blend`  
+Average twenty frames of someone sitting still and everything that moved — eyes, breath, hands — becomes a soft blur inside a sharp figure. A long exposure without the highlight clipping.  
+*Needs:* Tripod
+
+**98 · Diptychs and grids, automatically**  
+`montage from EXIF`  
+Pair frames by time, focal length or subject and lay them out programmatically. The constraint does the editing for you, which is often better than taste.  
+*Needs:* nothing beyond the basics
+
+**99 · Proofing against a measured profile**  
+`profile → soft proof → print`  
+With a real profile for the camera and one for the printer, you can see on screen what the paper will actually do before spending the ink.  
+*Needs:* ColorChecker (Classic or Mini), ArgyllCMS, Inkjet + transparency film
+
+**100 · A printed index of everything**  
+`EXIF → cards`  
+Generate an index card per shoot — thumbnail, date, settings, the Image Comment you typed on the camera. A physical index is the one that still works when the software does not.  
+*Needs:* nothing beyond the basics
+
 ---
 
 ## 8. Kit list
 
 Every accessory named in this guide, with what it costs and where it comes from.
 Prices are **rough USD estimates as of August 2026** — used-market items in
-particular swing wildly. New / used split is noted where it matters.
+particular swing wildly.
+
+> The **Kit tab in the app** is the live version of this: all 72 items the 100
+> projects ask for, tickable, with each project's readiness computed from what you
+> own and a ranked list of what to buy next. This section is the reasoning behind
+> the catalogue — the traps, the substitutions, the order to buy in. New / used split is noted where it matters.
 
 ### A worked example kit
 

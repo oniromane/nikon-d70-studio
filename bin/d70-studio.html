@@ -99,6 +99,7 @@ ul.man li{margin-bottom:3px}
 .proj .n{font-family:var(--mono);font-size:11px;color:var(--accent);flex:none}
 .proj .t{font-family:var(--display);text-transform:uppercase;letter-spacing:.04em;font-size:13px}
 .proj .fam{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+.proj .pnote{font-size:12.5px;color:var(--ink2);line-height:1.45;margin-top:2px}
 .proj .needs{font-size:12.5px;color:var(--warn)}
 .proj .acts{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
 
@@ -168,6 +169,54 @@ article#gbody{max-width:78ch;padding-bottom:60px}
 #gbody mark{background:var(--accent);color:#1a0f0d;border-radius:2px;padding:0 2px}
 .gmeta{font-family:var(--mono);font-size:10.5px;color:var(--ink3);letter-spacing:.06em;
   text-transform:uppercase;margin-bottom:16px}
+
+/* ── kit ── */
+.kitsum{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:18px}
+.stat{background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:14px 16px}
+.stat .n{font-family:var(--display);font-size:30px;font-weight:700;line-height:1;color:var(--ink)}
+.stat .n em{font-style:normal;font-size:15px;color:var(--ink3)}
+.stat .k{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;
+  font-size:10px;color:var(--ink3);margin-top:7px}
+.stat.hl .n{color:var(--accent)}
+
+.buynext{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+.buy{background:var(--panel2);border:1px solid var(--rule);border-left:3px solid var(--go);
+  border-radius:3px;padding:11px 13px;display:flex;flex-direction:column;gap:5px}
+.buy .bn{font-family:var(--display);text-transform:uppercase;letter-spacing:.04em;font-size:12.5px}
+.buy .bp{font-family:var(--mono);font-size:11px;color:var(--ink3)}
+.buy .bu{font-family:var(--mono);font-size:11px;color:var(--go)}
+.buy button{align-self:flex-start;margin-top:3px}
+
+.gcat{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-size:11px;
+  color:var(--ink3);margin:22px 0 8px;padding-top:12px;border-top:1px solid var(--rule)}
+.gitems{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.gitem{display:grid;grid-template-columns:22px 1fr;gap:10px;align-items:start;
+  background:var(--panel2);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;cursor:pointer}
+.gitem.have{border-color:var(--go);background:var(--go-bg)}
+.gitem.core{opacity:.72;cursor:default}
+.gitem input{margin:2px 0 0;accent-color:var(--go);width:15px;height:15px}
+.gitem .gn{font-family:var(--display);text-transform:uppercase;letter-spacing:.03em;font-size:12px}
+.gitem .gp{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:2px}
+.gitem .gd{font-size:12.5px;color:var(--ink2);margin-top:4px;line-height:1.4}
+.gitem .gu{font-family:var(--mono);font-size:10px;color:var(--go);margin-top:4px}
+
+/* ── glossary ── */
+.gloss{display:grid;grid-template-columns:1fr;gap:16px}
+@media(min-width:1000px){.gloss{grid-template-columns:200px minmax(0,1fr);gap:30px;align-items:start}
+  .gloss nav{position:sticky;top:104px}}
+.gloss nav button{display:block;width:100%;text-align:left;background:transparent;border:0;
+  color:var(--ink3);padding:5px 8px;border-left:2px solid transparent;border-radius:0}
+.gloss nav button:hover{color:var(--ink);background:var(--panel)}
+.gloss nav button.on{color:var(--accent);border-left-color:var(--accent);background:var(--panel)}
+.term{border-top:1px solid var(--rule);padding:12px 0}
+.term:first-child{border-top:0}
+.term dt{font-family:var(--display);text-transform:uppercase;letter-spacing:.04em;
+  font-size:13px;color:var(--ink);margin-bottom:4px}
+.term dd{margin:0;color:var(--ink2);font-size:14px;max-width:70ch}
+.term.hide{display:none}
+.tcat{font-family:var(--display);text-transform:uppercase;letter-spacing:.09em;font-size:10.5px;
+  color:var(--accent);margin:26px 0 6px}
+.tcat.hide{display:none}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head><body>
@@ -238,7 +287,7 @@ article#gbody{max-width:78ch;padding-bottom:60px}
   <div class="filters">
     <span class="dsp" style="font-size:11px;color:var(--ink3)">Filter</span>
     <select id="f-fam" onchange="renderProjects()"><option value="">All families</option></select>
-    <label style="font-size:13px"><input type="checkbox" id="f-runs" onchange="renderProjects()" style="vertical-align:-1px"> Example kit only</label>
+    <label style="font-size:13px"><input type="checkbox" id="f-runs" onchange="renderProjects()" style="vertical-align:-1px"> Only what I can run</label>
     <span class="chip" id="f-count"></span>
   </div>
   <div class="grid g3" id="projects"></div>
@@ -267,6 +316,36 @@ article#gbody{max-width:78ch;padding-bottom:60px}
     <article id="gbody"><p class="muted">Loading the guide…</p></article>
   </div>
 </section>
+
+<section class="tab" id="t-kit">
+  <div class="kitsum" id="kitsum"></div>
+  <div class="card" style="margin-bottom:16px">
+    <h3>What to buy next</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 12px">
+      Ranked by how many projects each item unlocks <em>on its own</em> — that is, projects
+      blocked by nothing else. Tick things off below and this reorders.</p>
+    <div class="buynext" id="buynext"></div>
+  </div>
+  <div class="card">
+    <h3>Everything the 100 projects ask for</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 4px">
+      Tick what you own. The Projects tab updates immediately, and your list is saved
+      to <code>gear.json</code> beside the picture library.</p>
+    <div id="gearlist"></div>
+  </div>
+</section>
+
+<section class="tab" id="t-gloss">
+  <p class="muted">Every term the guide and this app use, in plain language.
+     Written for someone who has never owned a camera.</p>
+  <div class="gloss">
+    <nav aria-label="Glossary categories">
+      <input id="tq" type="search" placeholder="Search terms…" oninput="filterTerms()" autocomplete="off" style="width:100%;margin-bottom:10px">
+      <div id="tcats"></div>
+    </nav>
+    <dl id="terms" style="margin:0"></dl>
+  </div>
+</section>
 <section class="tab" id="t-ref">
   <div class="grid g2">
     <div class="card"><h3>Control-panel codes</h3><div class="scroll"><table id="codes"></table></div></div>
@@ -285,7 +364,7 @@ const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElemen
   if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e;};
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-const TABS=[['camera','Camera'],['recipes','Recipes'],['projects','Projects'],['jobs','Jobs'],['ref','Reference'],['guide','Guide']];
+const TABS=[['camera','Camera'],['recipes','Recipes'],['projects','Projects'],['jobs','Jobs'],['kit','Kit'],['ref','Reference'],['gloss','Glossary'],['guide','Guide']];
 TABS.forEach(([id,label],i)=>{const b=el('button',i===0?'sel':'',label);
   b.onclick=()=>{document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('sel'));
     document.querySelectorAll('section.tab').forEach(x=>x.classList.remove('sel'));
@@ -317,7 +396,7 @@ async function api(path,body){
   const fam=[...new Set(BOOT.projects.map(p=>p.family))];
   fam.forEach(f=>{const o=el('option',null,esc(f)); o.value=f; $('#f-fam').appendChild(o);});
 
-  renderRecipes(); renderProjects(); renderRef();
+  renderRecipes(); renderProjects(); renderRef(); renderKit(); renderGlossary();
   Object.entries(BOOT.jobspecs).forEach(([k,v])=>{const o=el('option',null,esc(v.label)); o.value=k; $('#jk').appendChild(o);});
   renderJobForm();
   refresh(true); poll();
@@ -450,13 +529,14 @@ function renderProjects(){
   const box=$('#projects'); box.innerHTML='';
   const fam=$('#f-fam').value, only=$('#f-runs').checked;
   const list=BOOT.projects.filter(p=>(!fam||p.family===fam)&&(!only||p.runs));
-  $('#f-count').textContent=list.length+' of '+BOOT.projects.length;
+  $('#f-count').textContent=list.length+' of '+BOOT.projects.length+' · '+BOOT.projects.filter(p=>p.runs).length+' ready';
   list.forEach(p=>{
     const c=el('div','proj'+(p.runs?'':' blocked'));
     c.innerHTML=`<div class="fam">${p.fam} · ${esc(p.family)}</div>
-      <div class="hd"><span class="n">${String(p.n).padStart(2,'0')}</span><span class="t">${esc(p.title)}</span></div>
+      <div class="hd"><span class="n">${String(p.n).padStart(3,'0').slice(-3)}</span><span class="t">${esc(p.title)}</span></div>
       <div class="strip">${p.recipe.map(s=>`<span>${esc(s)}</span>`).join('')}</div>
-      ${p.needs?`<div class="needs">needs ${esc(p.needs)}</div>`:''}`;
+      ${p.note?`<div class="pnote">${esc(p.note)}</div>`:''}
+      ${p.missing&&p.missing.length?`<div class="needs">needs ${esc(p.missing.join(' · '))}</div>`:''}`;
     const acts=el('div','acts');
     if(p.job){
       const b=el('button',p.runs?'g':'','Set up job');
@@ -467,8 +547,8 @@ function renderProjects(){
         toast('Job pre-filled from project '+p.n,'ready',true);};
       acts.appendChild(b);
     }
-    if(!p.runs) acts.appendChild(el('span','chip off','blocked'));
-    else acts.appendChild(el('span','chip on','example kit'));
+    if(!p.runs) acts.appendChild(el('span','chip off',p.missing.length+' item'+(p.missing.length===1?'':'s')+' short'));
+    else acts.appendChild(el('span','chip on','ready'));
     c.appendChild(acts); box.appendChild(c);
   });
 }
@@ -586,6 +666,105 @@ function spyGuide(){
     });
   },{rootMargin:'-12% 0px -78% 0px',threshold:0});
   heads.forEach(h=>{ if(h.id) obs.observe(h); });
+}
+
+
+// ── kit ───────────────────────────────────────────────────────────────────
+// Ownership is the single input; every "runs" flag on the Projects tab is
+// derived from it server-side, so the two can never disagree.
+function renderKit(){
+  const gear=BOOT.gear, projs=BOOT.projects;
+  const owned=gear.filter(g=>g.owned), optional=gear.filter(g=>!g.core);
+  const have=optional.filter(g=>g.owned).length;
+  const runs=projs.filter(p=>p.runs).length;
+  const oneAway=projs.filter(p=>!p.runs && p.missing.length===1).length;
+
+  $('#kitsum').innerHTML=[
+    ['<em>'+have+'</em> / '+optional.length, 'items owned', ''],
+    [runs+' <em>/ '+projs.length+'</em>', 'projects you can run now', 'hl'],
+    [oneAway, 'one purchase away', ''],
+    [owned.length, 'items in your kit', ''],
+  ].map(([n,k,c])=>`<div class="stat ${c}"><div class="n">${n}</div><div class="k">${esc(k)}</div></div>`).join('');
+
+  const next=gear.filter(g=>!g.owned && g.unlocks>0).sort((a,b)=>b.unlocks-a.unlocks||a.name.localeCompare(b.name)).slice(0,8);
+  $('#buynext').innerHTML = next.length ? '' :
+    '<p class="muted" style="font-size:13px;margin:0">Nothing here unlocks a project on its own — the remaining projects each need two or more things. Tick a few more items and this will fill in.</p>';
+  next.forEach(g=>{
+    const c=el('div','buy');
+    c.innerHTML=`<div class="bn">${esc(g.name)}</div><div class="bp">${esc(g.price)}</div>
+                 <div class="bu">unlocks ${g.unlocks} project${g.unlocks===1?'':'s'}</div>`;
+    const b=el('button','g','I have this'); b.onclick=()=>setGear(g.id,true);
+    c.appendChild(b); $('#buynext').appendChild(c);
+  });
+
+  const box=$('#gearlist'); box.innerHTML='';
+  BOOT.gearCats.forEach(cat=>{
+    const items=gear.filter(g=>g.cat===cat); if(!items.length) return;
+    const n=items.filter(g=>g.owned).length;
+    box.appendChild(el('div','gcat',esc(cat)+' <span style="color:var(--ink3)">· '+n+'/'+items.length+'</span>'));
+    const grid=el('div','gitems');
+    items.forEach(g=>{
+      const it=el('div','gitem'+(g.owned?' have':'')+(g.core?' core':''));
+      const cb=el('input'); cb.type='checkbox'; cb.checked=g.owned; cb.disabled=!!g.core;
+      cb.onclick=e=>{e.stopPropagation(); setGear(g.id,cb.checked);};
+      const txt=el('div',null,
+        `<div class="gn">${esc(g.name)}</div>
+         <div class="gp">${esc(g.price)}${g.core?' · assumed':''}</div>
+         <div class="gd">${esc(g.note)}</div>
+         <div class="gu">${g.core
+             ? 'assumed present — every project needs it'
+             : g.usedBy+' project'+(g.usedBy===1?'':'s')+' use'+(g.usedBy===1?'s':'')+' it'
+               +(g.unlocks?' · '+g.unlocks+' unlocked by this alone':'')}</div>`);
+      if(!g.core) it.onclick=()=>setGear(g.id,!g.owned);
+      it.appendChild(cb); it.appendChild(txt); grid.appendChild(it);
+    });
+    box.appendChild(grid);
+  });
+}
+
+async function setGear(id,owned){
+  const r=await api('/api/gear',{id,owned});
+  if(!r.ok){toast(r.message||'could not save','kit');return;}
+  BOOT.gear=r.gear; BOOT.projects=r.projects;
+  renderKit(); renderProjects();
+  const g=BOOT.gear.find(x=>x.id===id);
+  toast((owned?'Added ':'Removed ')+(g?g.name:id),'kit',owned);
+}
+
+// ── glossary ──────────────────────────────────────────────────────────────
+function renderGlossary(){
+  const cats=$('#tcats'); cats.innerHTML='';
+  const mk=(label,cat)=>{const b=el('button',cat===null?'on':'',esc(label));
+    b.onclick=()=>{[...cats.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');
+      $('#tq').value=''; filterTerms(cat);};
+    cats.appendChild(b);};
+  mk('All '+BOOT.glossary.length,null);
+  BOOT.glossaryCats.forEach(c=>mk(c,c));
+
+  const dl=$('#terms'); dl.innerHTML='';
+  BOOT.glossaryCats.forEach(c=>{
+    const h=el('div','tcat',esc(c)); h.dataset.cat=c; dl.appendChild(h);
+    BOOT.glossary.filter(t=>t.cat===c).forEach(t=>{
+      const d=el('div','term'); d.dataset.cat=c;
+      d.innerHTML=`<dt>${esc(t.term)}</dt><dd>${esc(t.def)}</dd>`;
+      dl.appendChild(d);
+    });
+  });
+}
+
+function filterTerms(cat){
+  const q=$('#tq').value.trim().toLowerCase();
+  if(cat!==undefined) $('#terms').dataset.cat=cat===null?'':cat;
+  const only=$('#terms').dataset.cat||'';
+  let shown={};
+  document.querySelectorAll('#terms .term').forEach(d=>{
+    const okCat=!only||d.dataset.cat===only;
+    const okQ=!q||d.textContent.toLowerCase().includes(q);
+    const vis=okCat&&okQ;
+    d.classList.toggle('hide',!vis);
+    if(vis) shown[d.dataset.cat]=true;
+  });
+  document.querySelectorAll('#terms .tcat').forEach(h=>h.classList.toggle('hide',!shown[h.dataset.cat]));
 }
 
 function renderRef(){

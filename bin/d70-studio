@@ -24,10 +24,21 @@ Design notes that matter:
     matched against candidate names. The resolved map is shown in the UI.
 """
 
-import argparse, html, json, mimetypes, os, re, shlex, shutil, signal
+import argparse, html, json, mimetypes, os, re, shlex, shutil, signal, sys
 import subprocess, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import d70_data                                          # noqa: E402
+
+GEAR      = d70_data.GEAR
+GEAR_BY_ID= d70_data.GEAR_BY_ID
+CORE      = d70_data.CORE
+PROJECTS  = d70_data.PROJECTS
+GLOSSARY  = d70_data.GLOSSARY
+GLOSSARY_CATS = d70_data.GLOSSARY_CATS
+FAMILIES  = d70_data.FAMILIES
 
 HERE     = Path(__file__).resolve().parent
 PROJECT  = HERE.parent
@@ -509,87 +520,6 @@ RECIPES = [
      "why": "Auto sharpening re-decides per frame. Frame 40 gets a different curve than frame 39 and it flickers."},
 ]
 
-F = {"A": "Desk", "B": "Time", "C": "Light", "D": "Optics",
-     "E": "Beyond the visible", "F": "Feeding other software",
-     "G": "Triggers", "H": "Physics on a tabletop", "I": "Repetition"}
-
-# runs=True → covered by the worked example kit in the guide: an 18–55 kit zoom,
-# a 70–300D, a pre-CLS SB-25 flash, a card and a tripod. Adjust for your own gear.
-def P(n, fam, title, recipe, runs, job=None, needs=None):
-    return {"n": n, "fam": fam, "family": F[fam], "title": title,
-            "recipe": recipe, "runs": runs, "job": job, "needs": needs}
-
-PROJECTS = [
- P(1,"A","Permanent tethered copy stand",["M","f/8","ISO 200","PRE WB","Adobe RGB","grid on"],False,
-   {"kind":"tether","values":{"session":"copystand"}},"copy stand or a tripod arm"),
- P(2,"A","Film and slide scanner",["M","f/8","ISO 200","macro or bellows","LED panel"],False,
-   None,"macro lens + light panel + film holder"),
- P(3,"A","Cross-polarised art repro",["M","f/8","ISO 200","linear on flash","C-PL on lens"],False,
-   {"kind":"tether","values":{"session":"repro"}},"circular polariser (62 mm) + linear sheet"),
- P(4,"A","Product turntable",["M","f/11","ISO 200","manual focus","fixed WB"],True,
-   {"kind":"interval","values":{"seconds":"8","frames":"36","name":"turntable"}}),
- P(5,"A","Macro focus stacking",["M","f/8","manual focus","self-timer","15–30 frames"],True,
-   {"kind":"stack","values":{"mode":"focus"}}),
- P(6,"B","The slow observatory",["M","manual focus","fixed WB","EH-5 mains","review OFF"],True,
-   {"kind":"interval","values":{"seconds":"900","frames":"96","name":"window"}},"EH-5 for runs over ~200 frames"),
- P(7,"B","Time-lapse, properly deflickered",["24 fps","deflicker","Lanczos"],True,
-   {"kind":"movie","values":{"fps":"24"}}),
- P(8,"B","Holy-grail day-to-night ramp",["M","fixed aperture","manual focus","NR off"],True,
-   {"kind":"bulbramp","values":{"frames":"240","name":"sunset"}}),
- P(9,"B","Slit-scan time strips",["any interval sequence"],True,
-   {"kind":"timestrip","values":{"px":"4","axis":"cols"}}),
- P(10,"B","Time-stacking and crowd removal",["mean of N frames"],True,
-   {"kind":"stack","values":{"mode":"noise"}}),
- P(11,"C","Ambush the sun at 1/500",["M","1/500","f/5.6","ISO 200","SB-25 in A or M"],True,None),
- P(12,"C","Frozen water, by flash duration",["M","1/250","f/11","SB-25 M at 1/16","dark room"],True,None),
- P(13,"C","Off-camera lighting",["CSM 19 → Commander","SB-600/800"],False,None,
-   "SB-600/800 for CLS — or a $10 optical slave for the SB-25"),
- P(14,"C","Light painting",["M","20–30 s","f/8","ISO 200","manual focus"],True,None),
- P(15,"C","Photometric stereo → normal maps",["M","f/8","ISO 200","4 flash positions","camera fixed"],False,
-   {"kind":"normalmap","values":{}},"a way to get the SB-25 off-camera"),
- P(16,"D","Reversed-lens macro",["M","manual everything","reversing ring"],False,None,
-   "reversing ring — and a lens with an aperture ring, not the 18–55 G"),
- P(17,"D","Bellows and enlarger optics",["M","focus by rail","f/5.6"],False,None,"PB-6 bellows + enlarger lens"),
- P(18,"D","Vintage manual glass",["M only","meter inactive","rangefinder works"],False,None,"AI/AI-S or adapted glass"),
- P(19,"D","Telescope / microscope prime focus",["M","no lens","T-ring"],False,None,"telescope or trinocular port + T-ring"),
- P(20,"D","Pinhole body cap",["M","f/≈180","2–30 s","NR on"],False,None,"a spare BF-1A body cap ($5)"),
- P(21,"E","Infrared with a 720 nm filter",["M","R72","manual focus","PRE WB off foliage"],False,None,
-   "62 mm Hoya R72 (~$85)"),
- P(22,"E","Deep-sky stacking",["M","30 s","f/3.5","ISO 800","manual ∞","NR off"],True,
-   {"kind":"interval","values":{"seconds":"34","frames":"200","name":"orion"}}),
- P(23,"E","Measured profile for this sensor",["M","f/8","ISO 200","ColorChecker"],False,None,"ColorChecker + argyll-cms"),
- P(24,"E","Lens testing bench",["tripod","chart","aperture sweep"],True,
-   {"kind":"sweep","values":{"key":"aperture","values":"f/4 f/5.6 f/8 f/11 f/16 f/22"}}),
- P(25,"E","Densitometry",["M","fixed everything","step wedge on a light panel"],True,None,
-   "a step wedge, or use your own ND filters"),
- P(26,"F","Photogrammetry → Blender",["M","f/11","ISO 200","even light","fixed everything"],True,
-   {"kind":"interval","values":{"seconds":"8","frames":"36","name":"photogrammetry"}}),
- P(27,"F","Bracketed panorama → HDRI",["M","f/8","3-frame AE bracket","nodal rail"],False,None,"nodal head + Hugin"),
- P(28,"F","Gigapixel panorama",["M","fixed exposure","30–50% overlap","telephoto"],True,None,
-   "nodal head helps; the 70–300 is exactly right"),
- P(29,"F","Event detection from a long sequence",["interval + ffmpeg scene detect"],True,
-   {"kind":"interval","values":{"seconds":"10","frames":"360","name":"yard"}}),
- P(30,"F","Distil the CCD's look into a LUT",["M","f/8","ISO 200","ColorChecker","two cameras"],False,None,"ColorChecker"),
- P(31,"G","Build the trigger the camera never had",["CSM 25 → 15 min","quick-response remote","ESP32 + IR LED"],False,
-   None,"ESP32 + IR LED (~$15)"),
- P(32,"G","Sound-triggered high speed",["M","bulb via ML-L3","f/11","dark room","flash on a sound trigger"],False,
-   None,"ML-L3 + a sound trigger"),
- P(33,"G","Stroboscopic chronophotography",["M","2–4 s","f/8","SB-25 in RPT","dark room"],True,None),
- P(34,"H","Spectroscopy with a diffraction grating",["M","f/5.6","manual ∞","NEF"],False,None,
-   "1000 lines/mm grating film (~$10)"),
- P(35,"H","UV-induced fluorescence",["M","5–30 s","f/5.6","ISO 400","365 nm torch"],False,None,
-   "365 nm torch — not 395 nm"),
- P(36,"H","Photoelasticity",["M","f/8","ISO 200","crossed polarisers"],False,None,"the same two polarisers as project 03"),
- P(37,"H","The sun, safely",["M","1/500","f/8","ISO 200","full-aperture solar filter"],False,None,
-   "Baader AstroSolar (~$35). NEVER an ND filter alone."),
- P(38,"I","Rephotography",["M","record everything","return"],True,
-   {"kind":"tether","values":{"session":"rephoto"}}),
- P(39,"I","Stop-motion with onion-skinning",["M","manual focus","fixed WB"],True,
-   {"kind":"onion","values":{"blend":"2"}}),
- P(40,"I","An event photo booth",["M","1/60","f/8","ISO 200","one flash","focus locked"],False,
-   {"kind":"tether","values":{"session":"party"}},"ML-L3 in the guests' hands"),
-]
-
 DISPLAY_CODES = [
     ["FEE",       "Aperture ring not at minimum",       "Lock the 70–300 at its highest f/-number (p.18)"],
     ["F--",       "Non-CPU lens fitted",                "Mode M; meter inactive (p.83)"],
@@ -623,6 +553,80 @@ RESETS = [
     ["Custom Settings reset", "CSM menu → R Menu reset → Reset", "All 25 Custom Settings (p.136)"],
     ["Unlock the full menu", "Setup → CSM menu → Detailed", "Reveals Custom Settings 10–25. Do this first. (p.161)"],
 ]
+
+
+# ── gear ─────────────────────────────────────────────────────────────────────
+# What the owner actually has. Persisted next to the picture library rather than
+# inside the app bundle, so reinstalling the app never loses it.
+
+GEAR_FILE = ROOT / "gear.json"
+GEAR_LOCK = threading.Lock()
+
+
+def load_gear():
+    if GEAR_FILE.is_file():
+        try:
+            owned = set(json.loads(GEAR_FILE.read_text()).get("owned", []))
+            return {g for g in owned if g in GEAR_BY_ID}
+        except Exception:                                       # noqa: BLE001
+            pass
+    return set(CORE)                    # a body, a lens, a card — assume these
+
+
+def save_gear(owned):
+    with GEAR_LOCK:
+        ROOT.mkdir(parents=True, exist_ok=True)
+        GEAR_FILE.write_text(json.dumps(
+            {"owned": sorted(owned)}, indent=2))
+
+
+OWNED = load_gear()
+
+
+def _met(req, owned):
+    """One requirement. A list means any one of them will do."""
+    if isinstance(req, list):
+        return any(r in owned for r in req)
+    return req in owned
+
+
+def missing_for(project, owned):
+    """Which requirements are unmet, as gear ids (alternatives kept grouped)."""
+    return [r for r in project["requires"] if not _met(r, owned)]
+
+
+def gear_label(req):
+    if isinstance(req, list):
+        return " or ".join(GEAR_BY_ID[r]["name"] for r in req if r in GEAR_BY_ID)
+    return GEAR_BY_ID[req]["name"] if req in GEAR_BY_ID else req
+
+
+def projects_view(owned):
+    out = []
+    for p in PROJECTS:
+        miss = missing_for(p, owned)
+        out.append({**p, "runs": not miss,
+                    "missing": [gear_label(r) for r in miss],
+                    "missingIds": [r if isinstance(r, list) else [r] for r in miss]})
+    return out
+
+
+def gear_view(owned):
+    """Every item, whether it is owned, and how many projects it would unlock."""
+    rows = []
+    for g in GEAR:
+        held = g["id"] in owned
+        # projects blocked ONLY by this item — its true marginal value
+        unlocks = 0
+        for p in PROJECTS:
+            miss = missing_for(p, owned)
+            if len(miss) == 1 and _met(miss[0], {g["id"]}):
+                unlocks += 1
+        used_by = sum(1 for p in PROJECTS
+                      if any(g["id"] in (r if isinstance(r, list) else [r])
+                             for r in p["requires"]))
+        rows.append({**g, "owned": held, "unlocks": unlocks, "usedBy": used_by})
+    return rows
 
 
 # ─────────────────────────────────────────────────────── the guide, rendered ──
@@ -826,7 +830,15 @@ class Handler(BaseHTTPRequestHandler):
                 "tools": {t: bool(shutil.which(t)) for t in
                           ("gphoto2", "exiftool", "magick", "ffmpeg", "dcraw_emu",
                            "align_image_stack", "enfuse")},
-                "recipes": RECIPES, "projects": PROJECTS,
+                "recipes": RECIPES,
+                "projects": projects_view(OWNED),
+                "gear": gear_view(OWNED),
+                "gearCats": [c for c in
+                             ["Core","Support","Light","Filter","Optics",
+                              "Target","Rig","Software"]
+                             if any(g["cat"] == c for g in GEAR)],
+                "glossary": GLOSSARY, "glossaryCats": GLOSSARY_CATS,
+                "families": FAMILIES,
                 "jobspecs": {k: {kk: vv for kk, vv in v.items() if kk != "script"}
                              for k, v in JOB_SPECS.items()},
                 "codes": DISPLAY_CODES, "traps": TRAPS, "resets": RESETS,
@@ -849,6 +861,11 @@ class Handler(BaseHTTPRequestHandler):
             body, toc = render_markdown(src.read_text(encoding="utf-8", errors="replace"))
             return self._send(200, {"ok": True, "html": body, "toc": toc,
                                     "source": str(src)})
+
+        if p == "/api/gear":
+            return self._send(200, {"gear": gear_view(OWNED),
+                                    "owned": sorted(OWNED),
+                                    "projects": projects_view(OWNED)})
 
         if p == "/api/frames":
             return self._send(200, {"frames": recent_frames()})
@@ -893,6 +910,23 @@ class Handler(BaseHTTPRequestHandler):
             refresh(force=True)
             return self._send(200, {"ok": True, "applied": applied,
                                     "refused": refused, "manual": rec["manual"]})
+
+        if p == "/api/gear":
+            global OWNED
+            gid = body.get("id")
+            if body.get("all") is not None:                 # bulk set
+                OWNED = {g for g in body["all"] if g in GEAR_BY_ID} | set(CORE)
+            elif gid in GEAR_BY_ID:
+                if body.get("owned"):
+                    OWNED = OWNED | {gid}
+                else:
+                    OWNED = (OWNED - {gid}) | set(CORE)
+            else:
+                return self._send(400, {"ok": False, "message": f"unknown gear id {gid!r}"})
+            save_gear(OWNED)
+            return self._send(200, {"ok": True, "owned": sorted(OWNED),
+                                    "gear": gear_view(OWNED),
+                                    "projects": projects_view(OWNED)})
 
         if p == "/api/capture":
             ok, msg = capture_now()
