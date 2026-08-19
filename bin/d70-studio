@@ -1,0 +1,794 @@
+#!/usr/bin/env python3
+"""
+d70-studio — a local control surface for the Nikon D70.
+
+    ./bin/d70-studio            # then open http://127.0.0.1:8070
+    ./bin/d70-studio --port 9000
+
+Everything in the operator's guide, wired to the camera:
+  * live camera status and settings over PTP
+  * the shooting recipes from section 03, applied with one click
+  * all 40 projects, each pre-filling the right job
+  * job launcher with live logs for the 13 bin/d70-* scripts
+  * the reference tables — display codes, traps, reset combos
+
+Python 3 standard library only. No pip, no npm.
+
+Design notes that matter:
+  * The D70 has NO live view. The preview pane shows the LAST CAPTURED FRAME,
+    which is the honest affordance for this body.
+  * gphoto2 cannot share the camera. Every camera operation takes CAMERA_LOCK,
+    and only one camera-touching job may run at a time.
+  * The D70's PTP config key names are not documented anywhere I could verify,
+    so they are DISCOVERED at connect time from `gphoto2 --list-config` and
+    matched against candidate names. The resolved map is shown in the UI.
+"""
+
+import argparse, html, json, mimetypes, os, re, shlex, shutil, signal
+import subprocess, threading, time, urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+HERE     = Path(__file__).resolve().parent
+PROJECT  = HERE.parent
+BIN      = HERE
+UI_FILE  = HERE / "d70-studio.html"
+ROOT     = Path(os.environ.get("D70_ROOT", Path.home() / "Pictures" / "D70"))
+
+# Hugin's CLI ships inside the app bundle, not on the default PATH. Add it here
+# so both shutil.which() and every job we spawn can see enfuse/align_image_stack.
+HUGIN = Path("/Applications/Hugin/tools_mac")
+if HUGIN.is_dir() and str(HUGIN) not in os.environ.get("PATH", ""):
+    os.environ["PATH"] = os.environ.get("PATH", "") + ":" + str(HUGIN)
+
+CAMERA_LOCK = threading.Lock()
+STATE_LOCK  = threading.Lock()
+
+STATE = {
+    "detected":   False,
+    "model":      "",
+    "port":       "",
+    "keys":       {},        # logical name -> actual gphoto2 config path
+    "unresolved": [],
+    "settings":   {},        # logical name -> {"current":…, "choices":[…]}
+    "error":      "",
+    "checked_at": 0.0,
+    "abilities":  [],
+}
+
+JOBS = {}                    # id -> dict
+JOB_SEQ = 0
+
+
+# ─────────────────────────────────────────────────────────── camera plumbing ──
+
+def gphoto_available():
+    return shutil.which("gphoto2") is not None
+
+
+def free_ptpcamerad():
+    """macOS claims any PTP camera the instant it enumerates. Take it back.
+
+    Verified the hard way on real hardware:
+      * one killall is NOT enough — launchd restarts it immediately, so the
+        `killall; sleep 1` idiom hands the window straight back;
+      * the agent cannot be unloaded: `launchctl bootout` fails with
+        "Operation not permitted while System Integrity Protection is engaged".
+    What works is SIGKILL followed by an immediate claim, with no gap.
+    """
+    subprocess.run(["killall", "-9", "ptpcamerad"], capture_output=True)
+
+
+def gp(args, timeout=40, tries=20):
+    """Run gphoto2, racing ptpcamerad for the interface.
+
+    A lost claim fails in milliseconds, so a fast failure is retried and a slow
+    one is returned as a genuine error.
+    """
+    if not gphoto_available():
+        return 127, "", "gphoto2 is not installed — run ./bin/d70-setup"
+    last = (1, "", "no attempt made")
+    for _ in range(tries):
+        free_ptpcamerad()                       # no sleep — that is the point
+        t0 = time.time()
+        try:
+            p = subprocess.run(["gphoto2", *args], capture_output=True,
+                               text=True, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            return 124, "", "gphoto2 timed out (camera asleep, or busy?)"
+        except Exception as exc:                               # noqa: BLE001
+            return 1, "", str(exc)
+        if p.returncode == 0:
+            return 0, p.stdout, p.stderr
+        last = (p.returncode, p.stdout, p.stderr)
+        if time.time() - t0 > 3:                # ran a while → real failure
+            break
+        if "claim" not in (p.stderr or "").lower():
+            break
+    return last
+
+
+def split_blocks(text):
+    """gphoto2 prints one block per --get-config, separated by a bare END, with
+    no key path echoed. Blocks are therefore paired positionally with the keys
+    that were requested."""
+    out, cur = [], []
+    for line in text.splitlines():
+        if line.strip() == "END":
+            out.append("\n".join(cur)); cur = []
+        else:
+            cur.append(line)
+    if cur and any(l.strip() for l in cur):
+        out.append("\n".join(cur))
+    return out
+
+
+# The D70's real config tree, read off the body (firmware V1.02): 210 keys, of
+# which 107 are named and 103 are raw PTP property codes under /main/other.
+# Studio still *discovers* rather than hardcodes — the leaf names below are
+# matched against what `gphoto2 --list-config` actually returns — but every one
+# of these has been confirmed present on this camera.
+GROUPS = [
+    ("Exposure", ["expprogram", "shutterspeed", "f-number", "iso",
+                  "exposurecompensation", "exposuremetermode", "evstep",
+                  "flexibleprogram", "exposurelock"]),
+    ("Image", ["imagequality", "imagesize", "whitebalance", "colormodel",
+               "optimizeimage", "sharpening", "tonecompensation",
+               "saturation", "hueadjustment"]),
+    ("Focus", ["focusmode", "autofocusarea", "focusmetermode", "focusareawrap",
+               "assistlight"]),
+    ("Flash", ["flashmode", "nikonflashmode", "flashexposurecompensation",
+               "flashmodemanualpower", "flashcommandermode",
+               "flashcommanderpower", "flashshutterspeed", "flashsign"]),
+    ("Drive & timing", ["capturemode", "burstnumber", "selftimerdelay",
+                        "remotetimeout", "longexpnr", "bracketing",
+                        "bracketset", "bracketorder", "aebracketingcount"]),
+    ("Body", ["csmmenu", "viewfindergrid", "imagereview", "afbeep",
+              "centerweightsize", "aelaflmode", "autoiso",
+              "minimumshutterspeed", "lcdofftime", "imagerotationflag",
+              "filenrsequencing", "nocfcardrelease", "reversedial",
+              "capturetarget", "recordingmedia"]),
+    ("Comment", ["imagecomment", "imagecommentenable"]),
+    ("Status", ["cameramodel", "deviceversion", "serialnumber", "batterylevel",
+                "acpower", "lensname", "focallength", "minfocallength",
+                "maxfocallength", "lightmeter", "externalflash",
+                "externalflashready", "flashopen", "flashcharged",
+                "maximumshots", "orientation", "lowlight"]),
+]
+
+# Actions are momentary, not settings — they fire rather than hold a value.
+ACTIONS = {
+    "bulb":           "Bulb — hold the shutter open (TOGGLE)",
+    "autofocusdrive": "Drive autofocus once",
+}
+
+CANDIDATES = {k: [k] for _, keys in GROUPS for k in keys}
+CANDIDATES.update({k: [k] for k in ACTIONS})
+# a couple of bodies name these differently; keep the fallbacks
+CANDIDATES["shutterspeed"] = ["shutterspeed", "shutterspeed2"]
+CANDIDATES["exposurecompensation"] = ["exposurecompensation", "exposurecompensation2"]
+CANDIDATES["focusmode"] = ["focusmode", "focusmode2"]
+
+# gphoto2 reports Readonly per key, so nothing needs hardcoding here.
+READONLY = set()
+
+def parse_config_block(text):
+    """Turn `gphoto2 --get-config` output into {'current':…, 'choices':[…]}."""
+    current, choices, label, typ, ro = None, [], None, None, False
+    for line in text.splitlines():
+        line = line.rstrip()
+        if line.startswith("Label:"):
+            label = line.split(":", 1)[1].strip()
+        elif line.startswith("Readonly:"):
+            ro = line.split(":", 1)[1].strip() == "1"
+        elif line.startswith("Type:"):
+            typ = line.split(":", 1)[1].strip()
+        elif line.startswith("Current:"):
+            current = line.split(":", 1)[1].strip()
+        elif line.startswith("Choice:"):
+            m = re.match(r"Choice:\s*\d+\s+(.*)$", line)
+            if m:
+                choices.append(m.group(1))
+    return {"label": label, "type": typ, "current": current,
+            "choices": choices, "readonly": ro}
+
+
+def refresh(force=False):
+    """Detect the camera, resolve its config key names, read current values."""
+    with STATE_LOCK:
+        fresh = (time.time() - STATE["checked_at"]) < 2.0
+    if fresh and not force:
+        return snapshot()
+
+    if busy_job():
+        with STATE_LOCK:
+            STATE["error"] = "camera busy — a job is holding it"
+            STATE["checked_at"] = time.time()
+        return snapshot()
+
+    with CAMERA_LOCK:
+        free_ptpcamerad()
+        time.sleep(0.4)
+
+        rc, out, err = gp(["--auto-detect"], timeout=20)
+        detected, model, port = False, "", ""
+        for line in out.splitlines():
+            if re.search(r"usb:", line):
+                parts = re.split(r"\s{2,}", line.strip())
+                if parts:
+                    model = parts[0].strip()
+                    port = parts[-1].strip()
+                    detected = True
+                break
+
+        keys, unresolved, settings, abilities = {}, [], {}, []
+        if detected:
+            rc2, listing, _ = gp(["--list-config"], timeout=25)
+            available = [l.strip() for l in listing.splitlines() if l.strip().startswith("/")]
+            leaf = {p.rsplit("/", 1)[-1]: p for p in available}
+
+            for logical, names in CANDIDATES.items():
+                hit = next((leaf[n] for n in names if n in leaf), None)
+                if hit:
+                    keys[logical] = hit
+                else:
+                    unresolved.append(logical)
+
+            # One invocation for everything: each gphoto2 call has to win the
+            # race against ptpcamerad, so minimise how many races we run.
+            names = list(keys.keys())
+            argv = []
+            for n in names:
+                argv += ["--get-config", keys[n]]
+            if argv:
+                rc3, out3, _ = gp(argv, timeout=90)
+                if rc3 == 0:
+                    blocks = split_blocks(out3)
+                    for n, blk in zip(names, blocks):
+                        settings[n] = parse_config_block(blk)
+
+            rc4, ab, _ = gp(["--abilities"], timeout=15)
+            abilities = [l.strip() for l in ab.splitlines() if l.strip()]
+
+    with STATE_LOCK:
+        STATE.update(detected=detected, model=model, port=port, keys=keys,
+                     unresolved=unresolved, settings=settings,
+                     abilities=abilities, checked_at=time.time(),
+                     error="" if detected else (err.strip() or "no camera found"))
+    return snapshot()
+
+
+def snapshot():
+    with STATE_LOCK:
+        return json.loads(json.dumps(STATE))
+
+
+def set_setting(logical, value):
+    with STATE_LOCK:
+        path = STATE["keys"].get(logical)
+    if not path:
+        return False, f"no config key resolved for {logical}"
+    with STATE_LOCK:
+        meta = STATE["settings"].get(logical) or {}
+    if meta.get("readonly"):
+        return False, f"{logical} is read-only on this body"
+    if busy_job():
+        return False, "camera busy — stop the running job first"
+    with CAMERA_LOCK:
+        free_ptpcamerad()
+        rc, out, err = gp(["--set-config", f"{path}={value}"], timeout=20)
+    if rc != 0:
+        return False, (err.strip() or out.strip() or "rejected by camera")
+    return True, f"{logical} = {value}"
+
+
+def capture_now():
+    if busy_job():
+        return False, "camera busy — stop the running job first"
+    dest = ROOT / "studio"
+    dest.mkdir(parents=True, exist_ok=True)
+    with CAMERA_LOCK:
+        free_ptpcamerad()
+        rc, out, err = gp(["--capture-image-and-download",
+                           "--filename", str(dest / "%Y%m%d_%H%M%S_%f.%C")],
+                          timeout=90)
+    if rc != 0:
+        return False, (err.strip() or out.strip() or "capture failed")
+    return True, out.strip().splitlines()[-1] if out.strip() else "captured"
+
+
+# ────────────────────────────────────────────────────────────────────── jobs ──
+
+# Every runnable script. `camera` marks the ones that hold the USB device.
+JOB_SPECS = {
+    "connect":   {"script": "d70-connect",   "camera": True,  "args": [],
+                  "label": "Connect", "desc": "Free ptpcamerad, detect, print capabilities"},
+    "tether":    {"script": "d70-tether",    "camera": True,
+                  "args": [{"name": "session", "label": "Session name", "default": "studio"}],
+                  "label": "Tether", "desc": "Shoot on the camera, frames land here"},
+    "interval":  {"script": "d70-interval",  "camera": True,
+                  "args": [{"name": "seconds", "label": "Interval (s)", "default": "10"},
+                           {"name": "frames",  "label": "Frames",       "default": "60"},
+                           {"name": "name",    "label": "Name",         "default": "seq"}],
+                  "label": "Intervalometer", "desc": "The intervalometer Nikon left out"},
+    "bulbramp":  {"script": "d70-bulbramp",  "camera": True,
+                  "args": [{"name": "frames", "label": "Frames",      "default": "240"},
+                           {"name": "name",   "label": "Name",        "default": "sunset"},
+                           {"name": "start",  "label": "Start index", "default": ""},
+                           {"name": "end",    "label": "End index",   "default": ""}],
+                  "label": "Bulb ramp", "desc": "Day-to-night exposure ramp"},
+    "sweep":     {"script": "d70-sweep",     "camera": True,
+                  "args": [{"name": "key",    "label": "Config key", "default": "iso"},
+                           {"name": "values", "label": "Values (space separated)",
+                            "default": "200 400 800 1600"}],
+                  "label": "Sweep", "desc": "Walk a setting, build a contact sheet",
+                  "expand_last": True},
+    "movie":     {"script": "d70-movie",     "camera": False,
+                  "args": [{"name": "folder", "label": "Frame folder", "default": ""},
+                           {"name": "fps",    "label": "fps",          "default": "24"}],
+                  "label": "Time-lapse", "desc": "Frames → deflickered H.264"},
+    "timestrip": {"script": "d70-timestrip", "camera": False,
+                  "args": [{"name": "folder", "label": "Frame folder", "default": ""},
+                           {"name": "px",     "label": "Slice px",     "default": "4"},
+                           {"name": "axis",   "label": "cols | rows",  "default": "cols"}],
+                  "label": "Time strip", "desc": "Collapse a sequence into one image"},
+    "stack":     {"script": "d70-stack",     "camera": False,
+                  "args": [{"name": "mode",   "label": "focus|expo|trails|noise", "default": "focus"},
+                           {"name": "folder", "label": "Frame folder", "default": ""}],
+                  "label": "Stack", "desc": "Focus · exposure · trails · noise"},
+    "normalmap": {"script": "d70-normalmap", "camera": False,
+                  "args": [{"name": "left",   "label": "Left",   "default": ""},
+                           {"name": "right",  "label": "Right",  "default": ""},
+                           {"name": "top",    "label": "Top",    "default": ""},
+                           {"name": "bottom", "label": "Bottom", "default": ""},
+                           {"name": "out",    "label": "Output", "default": "normal.png"}],
+                  "label": "Normal map", "desc": "Four flash directions → normal map"},
+    "onion":     {"script": "d70-onion",     "camera": False,
+                  "args": [{"name": "folder", "label": "Tether folder", "default": ""},
+                           {"name": "blend",  "label": "Frames to blend", "default": "2"}],
+                  "label": "Onion skin", "desc": "Stop-motion onion-skinning"},
+    "ingest":    {"script": "d70-ingest",    "camera": False,
+                  "args": [{"name": "src", "label": "Card path (blank = auto)", "default": ""}],
+                  "label": "Ingest", "desc": "Card → dated library, copying"},
+    "settings":  {"script": "d70-settings",  "camera": True,
+                  "args": [{"name": "cmd", "label": "show | list", "default": "list"}],
+                  "label": "Dump settings", "desc": "Every writable PTP key"},
+}
+
+
+def busy_job():
+    for j in JOBS.values():
+        if j["running"] and j["camera"]:
+            return j["id"]
+    return None
+
+
+def start_job(kind, values):
+    global JOB_SEQ
+    spec = JOB_SPECS.get(kind)
+    if not spec:
+        return None, f"unknown job: {kind}"
+    if spec["camera"]:
+        held = busy_job()
+        if held:
+            return None, f"camera already held by job {held}"
+
+    argv = [str(BIN / spec["script"])]
+    for a in spec["args"]:
+        v = (values.get(a["name"]) or "").strip()
+        if not v:
+            continue
+        if spec.get("expand_last") and a["name"] == "values":
+            argv.extend(shlex.split(v))
+        else:
+            argv.append(v)
+
+    if spec["camera"]:
+        free_ptpcamerad()
+
+    JOB_SEQ += 1
+    jid = f"{kind}-{JOB_SEQ}"
+    logdir = ROOT / ".studio-logs"
+    logdir.mkdir(parents=True, exist_ok=True)
+    logpath = logdir / f"{jid}.log"
+    logf = open(logpath, "wb")
+    try:
+        proc = subprocess.Popen(argv, stdout=logf, stderr=subprocess.STDOUT,
+                                cwd=str(PROJECT), start_new_session=True)
+    except Exception as exc:                                    # noqa: BLE001
+        logf.close()
+        return None, str(exc)
+
+    JOBS[jid] = {"id": jid, "kind": kind, "label": spec["label"], "argv": argv,
+                 "camera": spec["camera"], "proc": proc, "log": str(logpath),
+                 "started": time.time(), "running": True, "rc": None}
+    threading.Thread(target=_reap, args=(jid, logf), daemon=True).start()
+    return jid, None
+
+
+def _reap(jid, logf):
+    j = JOBS[jid]
+    j["proc"].wait()
+    j["rc"] = j["proc"].returncode
+    j["running"] = False
+    j["ended"] = time.time()
+    try:
+        logf.close()
+    except Exception:                                           # noqa: BLE001
+        pass
+
+
+def stop_job(jid):
+    j = JOBS.get(jid)
+    if not j:
+        return False, "no such job"
+    if not j["running"]:
+        return False, "already finished"
+    try:
+        os.killpg(os.getpgid(j["proc"].pid), signal.SIGTERM)
+    except Exception:                                           # noqa: BLE001
+        j["proc"].terminate()
+    return True, "stopping"
+
+
+def job_view(tail=40):
+    out = []
+    for j in sorted(JOBS.values(), key=lambda x: x["started"], reverse=True)[:12]:
+        try:
+            lines = Path(j["log"]).read_text(errors="replace").splitlines()[-tail:]
+        except Exception:                                       # noqa: BLE001
+            lines = []
+        out.append({"id": j["id"], "label": j["label"], "kind": j["kind"],
+                    "running": j["running"], "rc": j["rc"], "camera": j["camera"],
+                    "started": j["started"], "cmd": " ".join(j["argv"]),
+                    "log": lines})
+    return out
+
+
+def recent_frames(limit=12):
+    if not ROOT.exists():
+        return []
+    files = []
+    for p in ROOT.rglob("*"):
+        if p.suffix.lower() in (".jpg", ".jpeg") and ".studio-logs" not in p.parts:
+            try:
+                files.append((p.stat().st_mtime, p))
+            except OSError:
+                pass
+    files.sort(reverse=True)
+    return [{"path": str(p.relative_to(ROOT)), "mtime": m} for m, p in files[:limit]]
+
+
+# ───────────────────────────────────────────── knowledge from the guide (§3) ──
+
+# Mode-dial position cannot be set over PTP on this body — it is a physical
+# dial. Recipes therefore split into `manual` (you turn something) and `set`
+# (studio pushes it).
+RECIPES = [
+    {"id": "portrait", "name": "Available-light portrait",
+     "manual": ["Mode dial → A", "Metering → spot", "CSM 2 → AF-S, CSM 3 → single area"],
+     "set": {"aperture": "f/2.8", "iso": "200", "wb": "Automatic"},
+     "why": "Spot metering follows the active AF point, so meter a face by putting a point on it."},
+    {"id": "fill", "name": "Daylight fill-flash at 1/500",
+     "manual": ["Mode dial → M", "Flash up", "SB-25 → A or M (never TTL)", "Flash comp −0.7"],
+     "set": {"shutter": "1/500", "aperture": "f/4", "iso": "200"},
+     "why": "The shutter kills ambient by 2+ stops so the sky goes deep and the flash carries the subject."},
+    {"id": "landscape", "name": "Landscape",
+     "manual": ["Mode dial → A", "Matrix metering", "Optimize image → Landscape", "Tripod"],
+     "set": {"aperture": "f/8", "iso": "200"},
+     "why": "f/8–11 is the sharp band on both your lenses."},
+    {"id": "sports", "name": "Sports",
+     "manual": ["Mode dial → S", "CSM 2 → AF-C", "CSM 3 → dynamic area", "Shooting mode → continuous"],
+     "set": {"shutter": "1/1000", "iso": "400", "quality": "JPEG Normal"},
+     "why": "JPEG Normal buys a 12-frame buffer instead of 4."},
+    {"id": "macro", "name": "Macro",
+     "manual": ["Mode dial → M", "Focus selector → M", "Shooting mode → self-timer"],
+     "set": {"aperture": "f/8", "iso": "200"},
+     "why": "f/8 not f/16 — diffraction costs more than the depth gains. Mirror lock-up is cleaning-only here."},
+    {"id": "night", "name": "Night / city",
+     "manual": ["Mode dial → M", "Tripod", "Long exp. NR → ON", "Self-timer or ML-L3"],
+     "set": {"shutter": "8", "aperture": "f/8", "iso": "200"},
+     "why": "Long exp. NR doubles the cycle but kills the hot pixels."},
+    {"id": "trails", "name": "Star trails",
+     "manual": ["Mode dial → M", "Focus → manual, at ∞", "Long exp. NR → OFF"],
+     "set": {"shutter": "30", "aperture": "f/3.5", "iso": "400"},
+     "why": "NR off — the dark-frame pass punches dashes into every trail."},
+    {"id": "splash", "name": "Water / splash freeze",
+     "manual": ["Mode dial → M", "SB-25 → M at 1/16", "Room dark", "Pre-focus on the impact point"],
+     "set": {"shutter": "1/250", "aperture": "f/8", "iso": "200"},
+     "why": "Flash duration freezes it, not the shutter."},
+    {"id": "copy", "name": "Copy stand / artwork",
+     "manual": ["Mode dial → M", "Spot-meter a grey card", "PRE white balance off that card",
+                "Color mode → II (Adobe RGB)"],
+     "set": {"aperture": "f/8", "iso": "200"},
+     "why": "Adobe RGB files get a leading underscore — _DSC0001.JPG — handy in a mixed library."},
+    {"id": "seq", "name": "Sequence-safe (time-lapse / stacking)",
+     "manual": ["Mode dial → M", "Focus → manual", "WB → anything but Auto",
+                "Optimize image → Custom, Sharpening and Tone comp. FIXED", "CSM 7 image review → OFF"],
+     "set": {"iso": "200"},
+     "why": "Auto sharpening re-decides per frame. Frame 40 gets a different curve than frame 39 and it flickers."},
+]
+
+F = {"A": "Desk", "B": "Time", "C": "Light", "D": "Optics",
+     "E": "Beyond the visible", "F": "Feeding other software",
+     "G": "Triggers", "H": "Physics on a tabletop", "I": "Repetition"}
+
+# runs=True → possible with an 18–55, a 70–300D, an SB-25, a card and a tripod.
+def P(n, fam, title, recipe, runs, job=None, needs=None):
+    return {"n": n, "fam": fam, "family": F[fam], "title": title,
+            "recipe": recipe, "runs": runs, "job": job, "needs": needs}
+
+PROJECTS = [
+ P(1,"A","Permanent tethered copy stand",["M","f/8","ISO 200","PRE WB","Adobe RGB","grid on"],False,
+   {"kind":"tether","values":{"session":"copystand"}},"copy stand or a tripod arm"),
+ P(2,"A","Film and slide scanner",["M","f/8","ISO 200","macro or bellows","LED panel"],False,
+   None,"macro lens + light panel + film holder"),
+ P(3,"A","Cross-polarised art repro",["M","f/8","ISO 200","linear on flash","C-PL on lens"],False,
+   {"kind":"tether","values":{"session":"repro"}},"circular polariser (62 mm) + linear sheet"),
+ P(4,"A","Product turntable",["M","f/11","ISO 200","manual focus","fixed WB"],True,
+   {"kind":"interval","values":{"seconds":"8","frames":"36","name":"turntable"}}),
+ P(5,"A","Macro focus stacking",["M","f/8","manual focus","self-timer","15–30 frames"],True,
+   {"kind":"stack","values":{"mode":"focus"}}),
+ P(6,"B","The slow observatory",["M","manual focus","fixed WB","EH-5 mains","review OFF"],True,
+   {"kind":"interval","values":{"seconds":"900","frames":"96","name":"window"}},"EH-5 for runs over ~200 frames"),
+ P(7,"B","Time-lapse, properly deflickered",["24 fps","deflicker","Lanczos"],True,
+   {"kind":"movie","values":{"fps":"24"}}),
+ P(8,"B","Holy-grail day-to-night ramp",["M","fixed aperture","manual focus","NR off"],True,
+   {"kind":"bulbramp","values":{"frames":"240","name":"sunset"}}),
+ P(9,"B","Slit-scan time strips",["any interval sequence"],True,
+   {"kind":"timestrip","values":{"px":"4","axis":"cols"}}),
+ P(10,"B","Time-stacking and crowd removal",["mean of N frames"],True,
+   {"kind":"stack","values":{"mode":"noise"}}),
+ P(11,"C","Ambush the sun at 1/500",["M","1/500","f/5.6","ISO 200","SB-25 in A or M"],True,None),
+ P(12,"C","Frozen water, by flash duration",["M","1/250","f/11","SB-25 M at 1/16","dark room"],True,None),
+ P(13,"C","Off-camera lighting",["CSM 19 → Commander","SB-600/800"],False,None,
+   "SB-600/800 for CLS — or a $10 optical slave for the SB-25"),
+ P(14,"C","Light painting",["M","20–30 s","f/8","ISO 200","manual focus"],True,None),
+ P(15,"C","Photometric stereo → normal maps",["M","f/8","ISO 200","4 flash positions","camera fixed"],False,
+   {"kind":"normalmap","values":{}},"a way to get the SB-25 off-camera"),
+ P(16,"D","Reversed-lens macro",["M","manual everything","reversing ring"],False,None,
+   "reversing ring — and a lens with an aperture ring, not the 18–55 G"),
+ P(17,"D","Bellows and enlarger optics",["M","focus by rail","f/5.6"],False,None,"PB-6 bellows + enlarger lens"),
+ P(18,"D","Vintage manual glass",["M only","meter inactive","rangefinder works"],False,None,"AI/AI-S or adapted glass"),
+ P(19,"D","Telescope / microscope prime focus",["M","no lens","T-ring"],False,None,"telescope or trinocular port + T-ring"),
+ P(20,"D","Pinhole body cap",["M","f/≈180","2–30 s","NR on"],False,None,"a spare BF-1A body cap ($5)"),
+ P(21,"E","Infrared with a 720 nm filter",["M","R72","manual focus","PRE WB off foliage"],False,None,
+   "62 mm Hoya R72 (~$85)"),
+ P(22,"E","Deep-sky stacking",["M","30 s","f/3.5","ISO 800","manual ∞","NR off"],True,
+   {"kind":"interval","values":{"seconds":"34","frames":"200","name":"orion"}}),
+ P(23,"E","Measured profile for this sensor",["M","f/8","ISO 200","ColorChecker"],False,None,"ColorChecker + argyll-cms"),
+ P(24,"E","Lens testing bench",["tripod","chart","aperture sweep"],True,
+   {"kind":"sweep","values":{"key":"aperture","values":"f/4 f/5.6 f/8 f/11 f/16 f/22"}}),
+ P(25,"E","Densitometry",["M","fixed everything","step wedge on a light panel"],True,None,
+   "a step wedge, or use your own ND filters"),
+ P(26,"F","Photogrammetry → Blender",["M","f/11","ISO 200","even light","fixed everything"],True,
+   {"kind":"interval","values":{"seconds":"8","frames":"36","name":"photogrammetry"}}),
+ P(27,"F","Bracketed panorama → HDRI",["M","f/8","3-frame AE bracket","nodal rail"],False,None,"nodal head + Hugin"),
+ P(28,"F","Gigapixel panorama",["M","fixed exposure","30–50% overlap","telephoto"],True,None,
+   "nodal head helps; the 70–300 is exactly right"),
+ P(29,"F","Event detection from a long sequence",["interval + ffmpeg scene detect"],True,
+   {"kind":"interval","values":{"seconds":"10","frames":"360","name":"yard"}}),
+ P(30,"F","Distil the CCD's look into a LUT",["M","f/8","ISO 200","ColorChecker","two cameras"],False,None,"ColorChecker"),
+ P(31,"G","Build the trigger the camera never had",["CSM 25 → 15 min","quick-response remote","ESP32 + IR LED"],False,
+   None,"ESP32 + IR LED (~$15)"),
+ P(32,"G","Sound-triggered high speed",["M","bulb via ML-L3","f/11","dark room","flash on a sound trigger"],False,
+   None,"ML-L3 + a sound trigger"),
+ P(33,"G","Stroboscopic chronophotography",["M","2–4 s","f/8","SB-25 in RPT","dark room"],True,None),
+ P(34,"H","Spectroscopy with a diffraction grating",["M","f/5.6","manual ∞","NEF"],False,None,
+   "1000 lines/mm grating film (~$10)"),
+ P(35,"H","UV-induced fluorescence",["M","5–30 s","f/5.6","ISO 400","365 nm torch"],False,None,
+   "365 nm torch — not 395 nm"),
+ P(36,"H","Photoelasticity",["M","f/8","ISO 200","crossed polarisers"],False,None,"the same two polarisers as project 03"),
+ P(37,"H","The sun, safely",["M","1/500","f/8","ISO 200","full-aperture solar filter"],False,None,
+   "Baader AstroSolar (~$35). NEVER an ND filter alone."),
+ P(38,"I","Rephotography",["M","record everything","return"],True,
+   {"kind":"tether","values":{"session":"rephoto"}}),
+ P(39,"I","Stop-motion with onion-skinning",["M","manual focus","fixed WB"],True,
+   {"kind":"onion","values":{"blend":"2"}}),
+ P(40,"I","An event photo booth",["M","1/60","f/8","ISO 200","one flash","focus locked"],False,
+   {"kind":"tether","values":{"session":"party"}},"ML-L3 in the guests' hands"),
+]
+
+DISPLAY_CODES = [
+    ["FEE",       "Aperture ring not at minimum",       "Lock the 70–300 at its highest f/-number (p.18)"],
+    ["F--",       "Non-CPU lens fitted",                "Mode M; meter inactive (p.83)"],
+    ["CLOCK",     "Clock reset",                        "Setup → Date (p.161)"],
+    ["Hi / Lo",   "Beyond meter range",                 "ND filter, or change ISO / aperture"],
+    ["CHA",       "Card problem",                       "Reformat; try another card"],
+    ["-E-",       "No card",                            "Insert one"],
+    ["Full / FuL","Card or buffer full",                "Offload, or lower quality"],
+    ["Job nr",    "Long-exposure NR running",           "Wait — as long again as the exposure"],
+    ["----- --",  "Mirror locked up",                   "Switch off to drop it"],
+    ["rEF",       "Dust-off reference pending",         "Shoot a white surface at 10 cm (p.166)"],
+    ["PC",        "Connected in PTP mode",              "This is what you want — the handshake worked"],
+]
+
+TRAPS = [
+    ["SB-25 left in TTL",        "Shutter release LOCKS — the camera fires nothing at all (p.188)", "A or M on the flash"],
+    ["SB-25 in Commander mode",  "Predates CLS by a decade; nothing triggers it wirelessly",        "$10 optical slave, SC-17, or radio"],
+    ["70–300 ring not locked",   "Blinking FEE, no shutter",                                        "Lock at the highest f/-number"],
+    ["USB left on Mass Storage", "The Mac sees a card reader, not a camera. No control at all.",     "Setup → USB → PTP"],
+    ["Expecting V OUT live view","It mirrors the monitor, which is blank while shooting",           "Playback and menus only"],
+    ["Expecting live view / preview", "The CCD cannot feed the LCD. No preview exists on this body.", "Shoot and review — that is the workflow"],
+    ["CF card over 4 GB",        "Nikon's approved-card table tops out at 4 GB (p.192)",            "2–4 GB"],
+    ["Linear polariser on lens", "Manual p.191: the D70 cannot be used with them",                  "Circular, marked C-PL"],
+]
+
+RESETS = [
+    ["Two-button reset", "Hold BKT + metering (the two green dots) for 2 s",
+     "Shooting mode, focus area, metering, exp comp, bracketing, flash mode, quality, size, WB, ISO, Optimize image. Custom Settings survive. (p.111)"],
+    ["Format card", "Hold the two red FORMAT buttons for 2 s, then again to confirm",
+     "Erases everything including protected images. Always format in-camera. (p.21)"],
+    ["Custom Settings reset", "CSM menu → R Menu reset → Reset", "All 25 Custom Settings (p.136)"],
+    ["Unlock the full menu", "Setup → CSM menu → Detailed", "Reveals Custom Settings 10–25. Do this first. (p.161)"],
+]
+
+
+# ────────────────────────────────────────────────────────────────────── http ──
+
+def jbody(handler):
+    n = int(handler.headers.get("Content-Length") or 0)
+    if not n:
+        return {}
+    try:
+        return json.loads(handler.rfile.read(n).decode())
+    except Exception:                                           # noqa: BLE001
+        return {}
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "d70-studio"
+
+    def log_message(self, *a):                                  # quiet
+        pass
+
+    def _send(self, code, body, ctype="application/json"):
+        if isinstance(body, (dict, list)):
+            body = json.dumps(body).encode()
+        elif isinstance(body, str):
+            body = body.encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    # ------------------------------------------------------------------ GET --
+    def do_GET(self):
+        u = urllib.parse.urlparse(self.path)
+        p, q = u.path, urllib.parse.parse_qs(u.query)
+
+        if p in ("/", "/index.html"):
+            try:
+                return self._send(200, UI_FILE.read_text(), "text/html; charset=utf-8")
+            except FileNotFoundError:
+                return self._send(500, f"<h1>missing {UI_FILE}</h1>", "text/html")
+
+        if p == "/api/boot":
+            return self._send(200, {
+                "root": str(ROOT), "project": str(PROJECT),
+                "gphoto2": shutil.which("gphoto2") or "",
+                "tools": {t: bool(shutil.which(t)) for t in
+                          ("gphoto2", "exiftool", "magick", "ffmpeg", "dcraw_emu",
+                           "align_image_stack", "enfuse")},
+                "recipes": RECIPES, "projects": PROJECTS,
+                "jobspecs": {k: {kk: vv for kk, vv in v.items() if kk != "script"}
+                             for k, v in JOB_SPECS.items()},
+                "codes": DISPLAY_CODES, "traps": TRAPS, "resets": RESETS,
+                "groups": [{"name": n, "keys": k} for n, k in GROUPS],
+                "actions": ACTIONS,
+            })
+
+        if p == "/api/status":
+            return self._send(200, {"camera": refresh(force=("force" in q)),
+                                    "busy": busy_job()})
+
+        if p == "/api/jobs":
+            return self._send(200, {"jobs": job_view(), "busy": busy_job()})
+
+        if p == "/api/frames":
+            return self._send(200, {"frames": recent_frames()})
+
+        if p.startswith("/frame/"):
+            rel = urllib.parse.unquote(p[len("/frame/"):])
+            target = (ROOT / rel).resolve()
+            try:
+                target.relative_to(ROOT.resolve())
+            except ValueError:
+                return self._send(403, {"error": "outside the library"})
+            if not target.is_file():
+                return self._send(404, {"error": "not found"})
+            ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+            data = target.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
+
+        return self._send(404, {"error": "no such route"})
+
+    # ----------------------------------------------------------------- POST --
+    def do_POST(self):
+        p = urllib.parse.urlparse(self.path).path
+        body = jbody(self)
+
+        if p == "/api/config":
+            ok, msg = set_setting(body.get("key", ""), body.get("value", ""))
+            refresh(force=True)
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg})
+
+        if p == "/api/recipe":
+            rec = next((r for r in RECIPES if r["id"] == body.get("id")), None)
+            if not rec:
+                return self._send(404, {"ok": False, "message": "no such recipe"})
+            applied, refused = [], []
+            for k, v in rec["set"].items():
+                ok, msg = set_setting(k, v)
+                (applied if ok else refused).append(msg)
+            refresh(force=True)
+            return self._send(200, {"ok": True, "applied": applied,
+                                    "refused": refused, "manual": rec["manual"]})
+
+        if p == "/api/capture":
+            ok, msg = capture_now()
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg})
+
+        if p == "/api/action":
+            name = body.get("name", "")
+            with STATE_LOCK:
+                path = STATE["keys"].get(name)
+            if not path:
+                return self._send(404, {"ok": False, "message": f"no action {name}"})
+            if busy_job():
+                return self._send(400, {"ok": False, "message": "camera busy"})
+            val = body.get("value", "1")
+            with CAMERA_LOCK:
+                rc, out, err = gp(["--set-config", f"{path}={val}"], timeout=30)
+            ok = rc == 0
+            refresh(force=True)
+            return self._send(200 if ok else 400,
+                              {"ok": ok, "message": (err or out or f"{name}={val}").strip()})
+
+        if p == "/api/ptpcamerad":
+            free_ptpcamerad()
+            return self._send(200, {"ok": True, "message": "ptpcamerad released"})
+
+        if p == "/api/job":
+            jid, err = start_job(body.get("kind", ""), body.get("values") or {})
+            return self._send(200 if jid else 400,
+                              {"ok": bool(jid), "id": jid, "message": err or "started"})
+
+        if p == "/api/job/stop":
+            ok, msg = stop_job(body.get("id", ""))
+            return self._send(200 if ok else 400, {"ok": ok, "message": msg})
+
+        return self._send(404, {"error": "no such route"})
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Local control surface for the Nikon D70")
+    ap.add_argument("--port", type=int, default=8070)
+    ap.add_argument("--host", default="127.0.0.1")
+    args = ap.parse_args()
+
+    ROOT.mkdir(parents=True, exist_ok=True)
+    srv = ThreadingHTTPServer((args.host, args.port), Handler)
+
+    print(f"d70-studio  →  http://{args.host}:{args.port}")
+    print(f"library     →  {ROOT}")
+    print(f"gphoto2     →  {shutil.which('gphoto2') or 'NOT INSTALLED — run ./bin/d70-setup'}")
+    print("Ctrl-C to stop.\n")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopping…")
+        for j in JOBS.values():
+            if j["running"]:
+                stop_job(j["id"])
+        srv.shutdown()
+
+
+if __name__ == "__main__":
+    main()

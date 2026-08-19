@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# d70-setup — install the macOS toolchain for driving a Nikon D70.
+set -euo pipefail
+
+command -v brew >/dev/null || { echo "Homebrew required: https://brew.sh"; exit 1; }
+
+echo "==> Core (required)"
+brew install gphoto2 libgphoto2 exiftool
+
+echo "==> Raw + image + video (recommended)"
+brew install libraw imagemagick ffmpeg
+
+echo "==> Stacking tools (optional; only d70-stack focus/expo need these)"
+echo "    Hugin is deprecated upstream but the cask still installs."
+brew install --cask hugin || echo "   (skipped — install later with: brew install --cask hugin)"
+
+cat <<'EOF'
+
+Hugin's CLI lands in /Applications/Hugin/tools_mac. d70-stack and d70-studio
+add it to PATH themselves; add it to ~/.zshrc only if you want it in your shell:
+  export PATH="$PATH:/Applications/Hugin/tools_mac"
+
+Those binaries are unsigned x86_64 (Rosetta 2). macOS SIGKILLs the FIRST run of
+each one — exit 137, no output. Run it a second time and it works.
+
+Verify the D70 is a known camera:
+  gphoto2 --list-cameras | grep -i "D70"
+EOF

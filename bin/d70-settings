@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# d70-settings — read, snapshot, and push camera settings over PTP.
+#
+#   ./bin/d70-settings                    # show what the camera reports
+#   ./bin/d70-settings list               # every writable key
+#   ./bin/d70-settings save studio.conf   # snapshot current state
+#   ./bin/d70-settings load studio.conf   # push a snapshot back
+#   ./bin/d70-settings set iso 400
+set -euo pipefail
+source "$(dirname "$0")/_d70lib.sh"
+
+command -v gphoto2 >/dev/null || { echo "gphoto2 not installed — run ./bin/d70-setup"; exit 1; }
+d70_free
+
+CMD="${1:-show}"
+
+case "$CMD" in
+  show)
+    for k in iso f-number shutterspeed whitebalance imagequality exposurecompensation \
+             expprogram capturemode focusmode batterylevel; do
+      v=$(d70_gp --get-config "$k" 2>/dev/null | awk -F': ' '/^Current/{print $2}')
+      [[ -n "$v" ]] && printf "%-22s %s\n" "$k" "$v"
+    done
+    ;;
+  list)
+    d70_gp --list-config
+    ;;
+  save)
+    OUT="${2:?usage: d70-settings save <file>}"
+    gphoto2 --list-all-config > "$OUT"
+    echo "Full config written to $OUT"
+    ;;
+  load)
+    IN="${2:?usage: d70-settings load <file>}"
+    # Expects lines of  key=value  (comments and blanks ignored)
+    grep -vE '^\s*(#|$)' "$IN" | while IFS='=' read -r k v; do
+      k="${k// /}"; v="${v# }"
+      echo "  $k -> $v"
+      d70_gp --set-config "$k=$v" || echo "    (rejected)"
+    done
+    ;;
+  set)
+    d70_gp --set-config "${2:?key}=${3:?value}"
+    ;;
+  *)
+    echo "usage: d70-settings [show|list|save FILE|load FILE|set KEY VALUE]"; exit 1
+    ;;
+esac

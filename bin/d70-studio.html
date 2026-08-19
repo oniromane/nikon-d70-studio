@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D70 Studio</title>
+<style>
+/* Committed to a dark palette on purpose: this is a control surface, and
+   camera work happens in dim rooms. Colours come from the camera itself —
+   the grey-green top-plate LCD, the black shell, the red FORMAT lettering,
+   the green dot on the reset buttons. */
+:root{
+  --bg:#141613; --panel:#1D201B; --panel2:#252822; --rule:#343830;
+  --ink:#DFE1D9; --ink2:#A3A89C; --ink3:#767B6F;
+  --lcd:#2E3329; --lcd-ink:#C6D2B8; --lcd-edge:#454B3E;
+  --accent:#E06A5C; --accent-bg:#3A211E;
+  --go:#8CBE79; --go-bg:#22301D;
+  --warn:#D9A441; --warn-bg:#33280F;
+  --display:"Avenir Next Condensed","Helvetica Neue Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --body:Charter,"Iowan Old Style",Palatino,Georgia,serif;
+  --mono:"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);
+     font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.dsp{font-family:var(--display);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+code,.mono{font-family:var(--mono)}
+button{font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;font-weight:700;
+  font-size:11.5px;padding:7px 13px;border-radius:3px;border:1px solid var(--rule);
+  background:var(--panel2);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--ink3)}
+button.p{background:var(--accent);border-color:var(--accent);color:#1a0f0d}
+button.p:hover{filter:brightness(1.1)}
+button.g{background:var(--go);border-color:var(--go);color:#12200d}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select,input{font-family:var(--mono);font-size:12px;background:var(--lcd);color:var(--lcd-ink);
+  border:1px solid var(--lcd-edge);border-radius:2px;padding:5px 7px;max-width:100%}
+
+/* ── frame ── */
+.wrap{max-width:1500px;margin:0 auto;padding:0 20px 80px}
+header.top{position:sticky;top:0;z-index:20;background:var(--bg);
+  border-bottom:1px solid var(--rule);padding:14px 0 12px;margin-bottom:8px}
+.topline{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+h1{font-size:22px;margin:0;letter-spacing:.02em}
+h1 em{font-style:normal;color:var(--accent)}
+.chip{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:2px;
+  border:1px solid var(--rule);background:var(--panel);color:var(--ink2);white-space:nowrap}
+.chip.on{background:var(--go-bg);border-color:var(--go);color:var(--go)}
+.chip.off{background:var(--accent-bg);border-color:var(--accent);color:var(--accent)}
+.chip.busy{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.spacer{flex:1}
+
+nav.tabs{display:flex;flex-wrap:wrap;gap:2px;margin-top:12px}
+nav.tabs button{border-radius:3px 3px 0 0;border-bottom-color:transparent;background:transparent;color:var(--ink3)}
+nav.tabs button.sel{background:var(--panel);color:var(--accent);border-color:var(--rule);border-bottom-color:var(--panel)}
+
+section.tab{display:none;padding-top:18px}
+section.tab.sel{display:block}
+
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(330px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:16px 18px}
+.card h3{font-size:13px;margin:0 0 12px;color:var(--ink2)}
+.card.hl{border-color:var(--accent)}
+
+/* ── camera settings ── */
+.setrow{display:grid;grid-template-columns:96px 1fr;gap:10px;align-items:center;
+  padding:6px 0;border-bottom:1px dotted var(--rule)}
+.setrow:last-child{border-bottom:0}
+.setrow label{font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;
+  font-size:11px;color:var(--ink3)}
+.setrow .val{font-family:var(--mono);font-size:12.5px;color:var(--lcd-ink)}
+.keymap{font-family:var(--mono);font-size:10.5px;color:var(--ink3);word-break:break-all}
+
+.lcd{background:var(--lcd);border:1px solid var(--lcd-edge);border-radius:3px;
+  padding:14px 16px;color:var(--lcd-ink);font-family:var(--mono);font-size:12.5px}
+.lcd .big{font-size:26px;letter-spacing:.04em;display:flex;flex-wrap:wrap;gap:18px;align-items:baseline}
+.lcd .lbl{font-size:9.5px;letter-spacing:.2em;opacity:.6;text-transform:uppercase;display:block}
+
+/* ── lists ── */
+.rec{border:1px solid var(--rule);border-radius:3px;padding:12px 14px;background:var(--panel2)}
+.rec h4{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;
+  font-size:13px;margin:0 0 6px}
+.rec .why{font-size:13.5px;color:var(--ink2);margin:8px 0 10px}
+.strip{display:inline-flex;flex-wrap:wrap;gap:0;border:1px solid var(--lcd-edge);
+  border-radius:3px;overflow:hidden;margin:4px 0 8px}
+.strip span{padding:4px 9px;background:var(--lcd);color:var(--lcd-ink);
+  font-family:var(--mono);font-size:11px;border-right:1px solid var(--lcd-edge)}
+.strip span:last-child{border-right:0}
+ul.man{margin:6px 0 10px;padding-left:18px;font-size:13.5px;color:var(--ink2)}
+ul.man li{margin-bottom:3px}
+
+.proj{border:1px solid var(--rule);border-radius:3px;padding:12px 14px;background:var(--panel2);
+  display:flex;flex-direction:column;gap:4px}
+.proj.blocked{opacity:.62}
+.proj .hd{display:flex;gap:9px;align-items:baseline}
+.proj .n{font-family:var(--mono);font-size:11px;color:var(--accent);flex:none}
+.proj .t{font-family:var(--display);text-transform:uppercase;letter-spacing:.04em;font-size:13px}
+.proj .fam{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--ink3);text-transform:uppercase}
+.proj .needs{font-size:12.5px;color:var(--warn)}
+.proj .acts{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── jobs ── */
+.job{border:1px solid var(--rule);border-radius:3px;background:var(--panel2);margin-bottom:12px}
+.job .jh{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--rule)}
+.job .jt{font-family:var(--display);text-transform:uppercase;letter-spacing:.05em;font-size:13px}
+.job pre{margin:0;padding:12px 14px;background:#0E100D;color:#C9CCC3;font-family:var(--mono);
+  font-size:11.5px;line-height:1.55;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.cmd{font-family:var(--mono);font-size:10.5px;color:var(--ink3);word-break:break-all}
+
+/* ── tables ── */
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-family:var(--display);text-transform:uppercase;letter-spacing:.07em;font-size:10.5px;
+  text-align:left;color:var(--ink3);padding:8px 12px 8px 0;border-bottom:1px solid var(--rule);white-space:nowrap}
+td{padding:8px 12px 8px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+td:first-child,th:first-child{padding-left:0}
+.seg{font-family:var(--mono);font-weight:700;font-size:11.5px;background:var(--lcd);color:var(--lcd-ink);
+  border:1px solid var(--lcd-edge);padding:1px 6px;border-radius:2px;white-space:nowrap}
+.scroll{overflow-x:auto}
+
+/* ── frames ── */
+.frames{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.frames a{display:block;border:1px solid var(--rule);border-radius:3px;overflow:hidden;text-decoration:none}
+.frames img{width:100%;height:110px;object-fit:cover;display:block;background:var(--lcd)}
+.frames .fn{font-family:var(--mono);font-size:9.5px;color:var(--ink3);padding:5px 7px;word-break:break-all}
+
+#toast{position:fixed;right:18px;bottom:18px;z-index:60;display:flex;flex-direction:column;gap:8px;max-width:420px}
+.toast{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--accent);
+  border-radius:3px;padding:11px 14px;font-size:13.5px;box-shadow:0 6px 24px #0008}
+.toast.ok{border-left-color:var(--go)}
+.toast .tt{font-family:var(--display);text-transform:uppercase;letter-spacing:.08em;font-size:10.5px;
+  color:var(--ink3);display:block;margin-bottom:3px}
+.muted{color:var(--ink3)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head><body>
+
+<div class="wrap">
+<header class="top">
+  <div class="topline">
+    <h1>D70 <em>Studio</em></h1>
+    <span class="chip" id="c-cam">checking…</span>
+    <span class="chip" id="c-port"></span>
+    <span class="chip" id="c-busy" hidden></span>
+    <span class="spacer"></span>
+    <span class="chip" id="c-tools"></span>
+    <button onclick="freePtp()">Free ptpcamerad</button>
+    <button onclick="refresh(true)">Refresh</button>
+  </div>
+  <nav class="tabs" id="tabs"></nav>
+</header>
+
+<section class="tab sel" id="t-camera">
+  <div class="grid g2">
+    <div class="card">
+      <h3>Readout</h3>
+      <div class="lcd">
+        <div class="big" id="lcd-big"><span>—</span></div>
+        <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:16px" id="lcd-sub"></div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="p" id="btn-cap" onclick="capture()">Capture frame</button>
+        <button onclick="runJob('connect',{})">Run d70-connect</button>
+        <button onclick="runJob('settings',{cmd:'list'})">Dump every key</button>
+      </div>
+      <p class="muted" style="font-size:13px;margin:12px 0 0">
+        No live view exists on this body — the preview below is the
+        <strong>last captured frame</strong>, which is the honest affordance here.
+      </p>
+    </div>
+
+    <div class="card">
+      <h3>Settings — pushed over PTP</h3>
+      <div id="settings"><p class="muted">Connect the camera and set <code>Setup → USB → PTP</code>.</p></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>Resolved config keys</h3>
+    <p class="muted" style="font-size:13px;margin:0 0 10px">
+      The D70's PTP property names aren't documented anywhere I could verify, so Studio
+      discovers them from <code>gphoto2 --list-config</code> and matches candidates.
+      This is what it found on your body.
+    </p>
+    <div id="keymap" class="keymap">—</div>
+  </div>
+
+  <div class="card" style="margin-top:14px">
+    <h3>Recent frames</h3>
+    <div class="frames" id="frames"><p class="muted">Nothing captured yet.</p></div>
+  </div>
+</section>
+
+<section class="tab" id="t-recipes">
+  <p class="muted">From section 03 of the guide. Studio pushes what PTP can set; the
+  <strong>mode dial and menu items are physical</strong> and are listed for you to do by hand.</p>
+  <div class="grid g2" id="recipes"></div>
+</section>
+
+<section class="tab" id="t-projects">
+  <div class="filters">
+    <span class="dsp" style="font-size:11px;color:var(--ink3)">Filter</span>
+    <select id="f-fam" onchange="renderProjects()"><option value="">All families</option></select>
+    <label style="font-size:13px"><input type="checkbox" id="f-runs" onchange="renderProjects()" style="vertical-align:-1px"> Runs with my kit only</label>
+    <span class="chip" id="f-count"></span>
+  </div>
+  <div class="grid g3" id="projects"></div>
+</section>
+
+<section class="tab" id="t-jobs">
+  <div class="card" style="margin-bottom:16px">
+    <h3>Launch</h3>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <select id="jk" onchange="renderJobForm()"></select>
+      <span class="muted" id="jd" style="font-size:13px"></span>
+    </div>
+    <div id="jf" class="grid g3" style="margin-bottom:12px"></div>
+    <button class="p" onclick="submitJob()">Start</button>
+  </div>
+  <div id="jobs"><p class="muted">No jobs yet.</p></div>
+</section>
+
+<section class="tab" id="t-ref">
+  <div class="grid g2">
+    <div class="card"><h3>Control-panel codes</h3><div class="scroll"><table id="codes"></table></div></div>
+    <div class="card"><h3>Traps</h3><div class="scroll"><table id="traps"></table></div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h3>Button combos worth memorising</h3>
+    <div class="scroll"><table id="resets"></table></div></div>
+</section>
+
+</div>
+<div id="toast"></div>
+
+<script>
+let BOOT=null, CAM=null, BUSY=null;
+const $=s=>document.querySelector(s), el=(t,c,h)=>{const e=document.createElement(t);
+  if(c)e.className=c; if(h!==undefined)e.innerHTML=h; return e;};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const TABS=[['camera','Camera'],['recipes','Recipes'],['projects','Projects'],['jobs','Jobs'],['ref','Reference']];
+TABS.forEach(([id,label],i)=>{const b=el('button',i===0?'sel':'',label);
+  b.onclick=()=>{document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('sel'));
+    document.querySelectorAll('section.tab').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel'); $('#t-'+id).classList.add('sel');};
+  $('#tabs').appendChild(b);});
+
+function toast(msg,title,ok){const t=el('div','toast'+(ok?' ok':''),
+  `<span class="tt">${esc(title||'')}</span>${esc(msg)}`);
+  $('#toast').appendChild(t); setTimeout(()=>t.remove(),6500);}
+
+async function api(path,body){
+  const opt=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{};
+  const r=await fetch(path,opt); try{return await r.json();}catch(e){return {ok:false,message:'bad response'};}}
+
+// ── boot ──────────────────────────────────────────────────────────────────
+(async function(){
+  BOOT=await api('/api/boot');
+  const missing=Object.entries(BOOT.tools).filter(([k,v])=>!v).map(([k])=>k);
+  const core=['gphoto2','exiftool','magick','ffmpeg','dcraw_emu'];
+  const coreMissing=core.filter(t=>!BOOT.tools[t]);
+  $('#c-tools').textContent = coreMissing.length ? ('core missing: '+coreMissing.join(', '))
+    : missing.length ? ('optional missing: '+missing.join(', ')) : 'toolchain complete';
+  $('#c-tools').className='chip '+(coreMissing.length?'off':missing.length?'busy':'on');
+  $('#c-tools').title = missing.length
+    ? 'align_image_stack and enfuse ship with the Hugin cask: brew install --cask hugin, then add /Applications/Hugin/tools_mac to PATH. Only d70-stack focus/expo need them.'
+    : '';
+
+  const fam=[...new Set(BOOT.projects.map(p=>p.family))];
+  fam.forEach(f=>{const o=el('option',null,esc(f)); o.value=f; $('#f-fam').appendChild(o);});
+
+  renderRecipes(); renderProjects(); renderRef();
+  Object.entries(BOOT.jobspecs).forEach(([k,v])=>{const o=el('option',null,esc(v.label)); o.value=k; $('#jk').appendChild(o);});
+  renderJobForm();
+  refresh(true); poll();
+})();
+
+// ── status ────────────────────────────────────────────────────────────────
+async function refresh(force){
+  const d=await api('/api/status'+(force?'?force=1':''));
+  CAM=d.camera; BUSY=d.busy;
+  const c=$('#c-cam');
+  c.textContent=CAM.detected?(CAM.model||'camera'):'no camera';
+  c.className='chip '+(CAM.detected?'on':'off');
+  $('#c-port').textContent=CAM.detected?CAM.port:(CAM.error||'');
+  const b=$('#c-busy'); b.hidden=!BUSY; b.className='chip busy'; b.textContent=BUSY?('busy · '+BUSY):'';
+  $('#btn-cap').disabled=!CAM.detected||!!BUSY;
+  renderReadout(); renderSettings(); renderKeymap();
+}
+
+function renderReadout(){
+  const s=(CAM&&CAM.settings)||{}, g=k=>(s[k]&&s[k].current!=null?s[k].current:'—');
+  $('#lcd-big').innerHTML =
+    `<span><span class="lbl">shutter</span>${esc(g('shutterspeed'))}</span>`+
+    `<span><span class="lbl">aperture</span>${esc(g('f-number'))}</span>`+
+    `<span><span class="lbl">iso</span>${esc(g('iso'))}</span>`+
+    `<span><span class="lbl">mode</span>${esc(g('expprogram'))}</span>`;
+  const sub=[['wb','whitebalance'],['quality','imagequality'],['size','imagesize'],
+             ['exp comp','exposurecompensation'],['meter','exposuremetermode'],
+             ['focus','focusmode'],['drive','capturemode'],['battery','batterylevel'],
+             ['ac','acpower'],['lens','lensname'],['flash','externalflash'],
+             ['meter val','lightmeter'],['shots left','maximumshots']];
+  $('#lcd-sub').innerHTML = sub.filter(([l,k])=>s[k]!==undefined)
+    .map(([l,k])=>`<span><span class="lbl">${l}</span>${esc(g(k))}</span>`).join('');
+}
+
+function settingRow(k,s){
+  const row=el('div','setrow');
+  row.appendChild(el('label',null,esc(s.label||k)));
+  if(!s.readonly && s.choices && s.choices.length){
+    const sel=el('select');
+    s.choices.forEach(ch=>{const o=el('option',null,esc(ch)); o.value=ch; if(ch===s.current)o.selected=true; sel.appendChild(o);});
+    sel.onchange=async()=>{sel.disabled=true;
+      const r=await api('/api/config',{key:k,value:sel.value});
+      toast(r.message,s.label||k,r.ok); sel.disabled=false; refresh(true);};
+    row.appendChild(sel);
+  } else if(!s.readonly && (s.type==='TEXT'||s.type==='RANGE')){
+    const wrap=el('div'); wrap.style.display='flex'; wrap.style.gap='6px';
+    const i=el('input'); i.value=s.current||''; i.style.flex='1';
+    const b=el('button',null,'Set');
+    b.onclick=async()=>{b.disabled=true;
+      const r=await api('/api/config',{key:k,value:i.value});
+      toast(r.message,s.label||k,r.ok); b.disabled=false; refresh(true);};
+    wrap.appendChild(i); wrap.appendChild(b); row.appendChild(wrap);
+  } else {
+    row.appendChild(el('div','val',esc(s.current==null?'—':s.current)+
+      (s.readonly?' <span class="muted">· read-only</span>':'')));
+  }
+  return row;
+}
+
+function renderSettings(){
+  const box=$('#settings'); box.innerHTML='';
+  if(!CAM||!CAM.detected){box.innerHTML='<p class="muted">Connect the camera and set <code>Setup → USB → PTP</code>.</p>';return;}
+  if(BUSY){box.innerHTML='<p class="muted">Camera held by job <code>'+esc(BUSY)+'</code>. Stop it to change settings.</p>';return;}
+
+  // momentary actions first
+  const acts=Object.entries(BOOT.actions||{}).filter(([k])=>CAM.settings[k]!==undefined);
+  if(acts.length){
+    const h=el('div','dsp'); h.style.cssText='font-size:10.5px;color:var(--accent);margin:0 0 8px';
+    h.textContent='Actions'; box.appendChild(h);
+    const bar=el('div'); bar.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px';
+    acts.forEach(([k,desc])=>{
+      const s=CAM.settings[k];
+      const b=el('button','', esc(s.label||k)+(s.current!=null?(' · '+esc(s.current)):''));
+      b.title=desc;
+      b.onclick=async()=>{
+        let v='1';
+        if(s.type==='TOGGLE'){ v = (String(s.current)==='2'||String(s.current)==='0') ? '1' : '0'; }
+        b.disabled=true;
+        const r=await api('/api/action',{name:k,value:v});
+        toast(r.message,s.label||k,r.ok); b.disabled=false; refresh(true);};
+      bar.appendChild(b);
+    });
+    box.appendChild(bar);
+  }
+
+  let shown=0;
+  (BOOT.groups||[]).forEach(g=>{
+    const present=g.keys.filter(k=>CAM.settings[k]!==undefined && !BOOT.actions[k]);
+    if(!present.length) return;
+    const h=el('div','dsp');
+    h.style.cssText='font-size:10.5px;color:var(--ink3);margin:16px 0 6px;border-top:1px solid var(--rule);padding-top:12px';
+    h.textContent=g.name+'  ('+present.length+')';
+    box.appendChild(h);
+    present.forEach(k=>{ box.appendChild(settingRow(k,CAM.settings[k])); shown++; });
+  });
+
+  if(!shown) box.innerHTML='<p class="muted">Camera detected but no settings resolved. Put the mode dial on <strong>M</strong> and refresh — most keys are hidden in the scene modes.</p>';
+}
+
+function renderKeymap(){
+  const k=(CAM&&CAM.keys)||{}, u=(CAM&&CAM.unresolved)||[];
+  const rows=Object.entries(k).map(([a,b])=>`<div><span style="color:var(--go)">${esc(a)}</span> → ${esc(b)}</div>`).join('');
+  const un=u.length?`<div style="margin-top:8px;color:var(--warn)">unresolved: ${esc(u.join(', '))}</div>`:'';
+  $('#keymap').innerHTML=(rows||'<span class="muted">nothing resolved yet</span>')+un;
+}
+
+// ── recipes ───────────────────────────────────────────────────────────────
+function renderRecipes(){
+  const box=$('#recipes'); box.innerHTML='';
+  BOOT.recipes.forEach(r=>{
+    const c=el('div','rec');
+    c.innerHTML=`<h4>${esc(r.name)}</h4>
+      <div class="strip">${Object.entries(r.set).map(([k,v])=>`<span>${esc(k)} ${esc(v)}</span>`).join('')}</div>
+      <div class="why">${esc(r.why)}</div>
+      <div class="dsp" style="font-size:10.5px;color:var(--ink3)">By hand</div>
+      <ul class="man">${r.manual.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>`;
+    const b=el('button','p','Apply what PTP can');
+    b.onclick=async()=>{b.disabled=true;
+      const d=await api('/api/recipe',{id:r.id});
+      if(d.applied&&d.applied.length) toast(d.applied.join(' · '),'applied',true);
+      if(d.refused&&d.refused.length) toast(d.refused.join(' · '),'refused by camera');
+      if(!d.applied?.length&&!d.refused?.length) toast(d.message||'nothing to push','recipe');
+      b.disabled=false; refresh(true);};
+    c.appendChild(b); box.appendChild(c);
+  });
+}
+
+// ── projects ──────────────────────────────────────────────────────────────
+function renderProjects(){
+  const box=$('#projects'); box.innerHTML='';
+  const fam=$('#f-fam').value, only=$('#f-runs').checked;
+  const list=BOOT.projects.filter(p=>(!fam||p.family===fam)&&(!only||p.runs));
+  $('#f-count').textContent=list.length+' of '+BOOT.projects.length;
+  list.forEach(p=>{
+    const c=el('div','proj'+(p.runs?'':' blocked'));
+    c.innerHTML=`<div class="fam">${p.fam} · ${esc(p.family)}</div>
+      <div class="hd"><span class="n">${String(p.n).padStart(2,'0')}</span><span class="t">${esc(p.title)}</span></div>
+      <div class="strip">${p.recipe.map(s=>`<span>${esc(s)}</span>`).join('')}</div>
+      ${p.needs?`<div class="needs">needs ${esc(p.needs)}</div>`:''}`;
+    const acts=el('div','acts');
+    if(p.job){
+      const b=el('button',p.runs?'g':'','Set up job');
+      b.onclick=()=>{$('#jk').value=p.job.kind; renderJobForm(p.job.values);
+        document.querySelectorAll('nav.tabs button').forEach((x,i)=>x.classList.toggle('sel',i===3));
+        document.querySelectorAll('section.tab').forEach(x=>x.classList.remove('sel'));
+        $('#t-jobs').classList.add('sel'); window.scrollTo(0,0);
+        toast('Job pre-filled from project '+p.n,'ready',true);};
+      acts.appendChild(b);
+    }
+    if(!p.runs) acts.appendChild(el('span','chip off','blocked'));
+    else acts.appendChild(el('span','chip on','runs today'));
+    c.appendChild(acts); box.appendChild(c);
+  });
+}
+
+// ── jobs ──────────────────────────────────────────────────────────────────
+function renderJobForm(preset){
+  const kind=$('#jk').value, spec=BOOT.jobspecs[kind];
+  $('#jd').textContent=spec.desc+(spec.camera?' · holds the camera':'');
+  const f=$('#jf'); f.innerHTML='';
+  spec.args.forEach(a=>{
+    const w=el('div'); w.innerHTML=`<div class="dsp" style="font-size:10px;color:var(--ink3);margin-bottom:4px">${esc(a.label)}</div>`;
+    const i=el('input'); i.id='ja-'+a.name; i.value=(preset&&preset[a.name]!==undefined)?preset[a.name]:a.default;
+    i.style.width='100%'; w.appendChild(i); f.appendChild(w);
+  });
+  if(!spec.args.length) f.innerHTML='<p class="muted" style="font-size:13px">No arguments.</p>';
+}
+
+async function submitJob(){
+  const kind=$('#jk').value, spec=BOOT.jobspecs[kind], values={};
+  spec.args.forEach(a=>{const i=$('#ja-'+a.name); if(i)values[a.name]=i.value;});
+  const r=await api('/api/job',{kind,values});
+  toast(r.message+(r.id?(' — '+r.id):''),'job',r.ok);
+  pollJobs();
+}
+
+async function stopJob(id){const r=await api('/api/job/stop',{id}); toast(r.message,id,r.ok); pollJobs();}
+
+async function pollJobs(){
+  const d=await api('/api/jobs'); BUSY=d.busy;
+  const box=$('#jobs');
+  if(!d.jobs.length){box.innerHTML='<p class="muted">No jobs yet.</p>';return;}
+  box.innerHTML='';
+  d.jobs.forEach(j=>{
+    const c=el('div','job');
+    const state=j.running?'<span class="chip busy">running</span>'
+      :('<span class="chip '+(j.rc===0?'on':'off')+'">exit '+j.rc+'</span>');
+    const h=el('div','jh');
+    h.innerHTML=`<span class="jt">${esc(j.label)}</span><span class="chip">${esc(j.id)}</span>${state}
+      ${j.camera?'<span class="chip">camera</span>':''}<span class="spacer"></span>`;
+    if(j.running){const b=el('button','','Stop'); b.onclick=()=>stopJob(j.id); h.appendChild(b);}
+    c.appendChild(h);
+    c.appendChild(el('div','cmd','&nbsp;'+esc(j.cmd)));
+    c.appendChild(el('pre',null,esc(j.log.join('\n'))||'<span class="muted">no output yet</span>'));
+    box.appendChild(c);
+  });
+}
+
+async function pollFrames(){
+  const d=await api('/api/frames'); const box=$('#frames');
+  if(!d.frames.length){box.innerHTML='<p class="muted">Nothing captured yet.</p>';return;}
+  box.innerHTML='';
+  d.frames.forEach(f=>{
+    const a=el('a'); a.href='/frame/'+encodeURI(f.path); a.target='_blank';
+    a.innerHTML=`<img src="/frame/${encodeURI(f.path)}" loading="lazy" alt=""><div class="fn">${esc(f.path)}</div>`;
+    box.appendChild(a);
+  });
+}
+
+async function capture(){
+  const b=$('#btn-cap'); b.disabled=true; b.textContent='Capturing…';
+  const r=await api('/api/capture',{}); toast(r.message,'capture',r.ok);
+  b.textContent='Capture frame'; refresh(true); pollFrames();
+}
+async function freePtp(){const r=await api('/api/ptpcamerad',{}); toast(r.message,'macOS',true); refresh(true);}
+
+function renderRef(){
+  $('#codes').innerHTML='<thead><tr><th>Display</th><th>Meaning</th><th>Fix</th></tr></thead><tbody>'+
+    BOOT.codes.map(r=>`<tr><td><span class="seg">${esc(r[0])}</span></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')+'</tbody>';
+  $('#traps').innerHTML='<thead><tr><th>Trap</th><th>What happens</th><th>Instead</th></tr></thead><tbody>'+
+    BOOT.traps.map(r=>`<tr><td><strong>${esc(r[0])}</strong></td><td>${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')+'</tbody>';
+  $('#resets').innerHTML='<thead><tr><th>What</th><th>How</th><th>Restores</th></tr></thead><tbody>'+
+    BOOT.resets.map(r=>`<tr><td><strong>${esc(r[0])}</strong></td><td class="mono" style="font-size:12px">${esc(r[1])}</td><td>${esc(r[2])}</td></tr>`).join('')+'</tbody>';
+}
+
+function poll(){ pollJobs(); pollFrames(); setInterval(pollJobs,2000); setInterval(pollFrames,5000);
+  setInterval(()=>{if(!document.hidden)refresh(false);},6000); }
+</script>
+</body></html>

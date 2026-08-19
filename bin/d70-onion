@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# d70-onion — onion-skinning for a camera with no live view.
+#
+#   ./bin/d70-onion ~/Pictures/D70/tether/claymation
+#   ./bin/d70-onion ~/Pictures/D70/tether/claymation 3    # blend last 3 frames
+#
+# Run d70-tether into a folder, run this against the same folder, then open the
+# onion.html it writes. The page refreshes itself, so every time you shoot,
+# the browser shows the last N frames blended together — which is exactly the
+# reference you need to pose the next one.
+set -euo pipefail
+
+DIR="${1:?usage: d70-onion <folder> [frames-to-blend]}"
+N="${2:-2}"
+mkdir -p "$DIR"
+
+command -v magick >/dev/null || { echo "ImageMagick not installed — brew install imagemagick"; exit 1; }
+
+cat > "$DIR/onion.html" <<'HTML'
+<!doctype html><meta charset="utf-8"><title>onion skin</title>
+<meta http-equiv="refresh" content="2">
+<style>
+  html,body{margin:0;height:100%;background:#111;display:grid;place-items:center}
+  img{max-width:100vw;max-height:100vh;object-fit:contain;image-rendering:auto}
+  p{color:#777;font:14px system-ui}
+</style>
+<img src="onion.jpg?x=0" onerror="this.replaceWith(Object.assign(document.createElement('p'),{textContent:'waiting for the first frames…'}))">
+<script>
+  // bust the cache so the refresh actually shows the new blend
+  document.querySelector('img')?.setAttribute('src','onion.jpg?x='+Date.now());
+</script>
+HTML
+
+echo "Watching : $DIR"
+echo "Blending : last $N frames"
+echo "Open     : file://$(cd "$DIR" && pwd)/onion.html"
+echo "Ctrl-C to stop."
+echo
+
+LAST=""
+while true; do
+  shopt -s nullglob nocaseglob
+  FRAMES=( "$DIR"/*.jpg )
+  shopt -u nocaseglob
+  if (( ${#FRAMES[@]} > 0 )); then
+    NEWEST=$(ls -t "$DIR"/*.[Jj][Pp][Gg] 2>/dev/null | grep -v onion.jpg | head -1 || true)
+    if [[ -n "$NEWEST" && "$NEWEST" != "$LAST" ]]; then
+      SET=$(ls -t "$DIR"/*.[Jj][Pp][Gg] 2>/dev/null | grep -v onion.jpg | head -"$N")
+      # shellcheck disable=SC2086
+      magick $SET -resize 1400x -evaluate-sequence mean "$DIR/onion.jpg.tmp" 2>/dev/null \
+        && mv "$DIR/onion.jpg.tmp" "$DIR/onion.jpg" \
+        && echo "  blended $(basename "$NEWEST")"
+      LAST="$NEWEST"
+    fi
+  fi
+  sleep 1
+done

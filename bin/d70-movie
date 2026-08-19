@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# d70-movie — turn a frame folder into a timelapse.
+#
+#   ./bin/d70-movie ~/Pictures/D70/interval/sunset
+#   ./bin/d70-movie ~/Pictures/D70/interval/sunset 30 out.mp4
+#
+# 'deflicker' evens out the 1/3-stop exposure jitter you get from any
+# aperture-priority or auto-WB frame in the sequence. Harmless if there is none.
+set -euo pipefail
+
+DIR="${1:?usage: d70-movie <folder> [fps] [out.mp4]}"
+FPS="${2:-24}"
+OUT="${3:-$DIR/../$(basename "$DIR")-${FPS}fps.mp4}"
+
+command -v ffmpeg >/dev/null || { echo "ffmpeg not installed — brew install ffmpeg"; exit 1; }
+
+shopt -s nullglob nocaseglob
+FRAMES=( "$DIR"/*.jpg )
+shopt -u nocaseglob
+
+if (( ${#FRAMES[@]} == 0 )); then
+  cat <<EOF
+No JPEGs in $DIR.
+If you shot NEF, develop them first:
+  mkdir -p "$DIR/jpg"
+  for f in "$DIR"/*.NEF; do
+    dcraw_emu -w -q 3 -T -Z - "\$f" | magick - -resize 1920x "$DIR/jpg/\$(basename "\${f%.NEF}").jpg"
+  done
+  $0 "$DIR/jpg" $FPS
+EOF
+  exit 1
+fi
+
+echo "${#FRAMES[@]} frames @ ${FPS}fps  ->  $OUT"
+ffmpeg -y -framerate "$FPS" -pattern_type glob -i "$DIR/*.[Jj][Pp][Gg]" \
+  -vf "deflicker=mode=pm:size=10,scale=1920:-2:flags=lanczos" \
+  -c:v libx264 -crf 18 -preset slow -pix_fmt yuv420p "$OUT"
+
+echo "Wrote $OUT"

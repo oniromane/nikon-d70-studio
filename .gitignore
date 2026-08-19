@@ -1,0 +1,13 @@
+.DS_Store
+*.swp
+
+# Captures, logs and derived images live under $D70_ROOT (default ~/Pictures/D70),
+# which is outside the repo. These patterns only matter if someone points
+# D70_ROOT inside the working tree.
+.studio-logs/
+onion.html
+onion.jpg
+as_*.tif
+stacked-*.tif
+*-timestrip.png
+*-[0-9]*fps.mp4

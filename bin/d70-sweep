@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# d70-sweep — hold the scene still, walk one setting across its range, capture each.
+#
+#   ./bin/d70-sweep iso 200 400 800 1600
+#   ./bin/d70-sweep f-number f/2.8 f/4 f/5.6 f/8 f/11 f/16
+#   ./bin/d70-sweep whitebalance Automatic Daylight Fluorescent Tungsten Flash Cloudy Shade
+#
+# Run  ./bin/d70-settings list  to see keys, and
+#   d70_gp --get-config <key>  to see the exact strings this body accepts.
+#
+# Camera must be in M (or A for an f-number sweep) or it will fight you.
+# Produces a labelled contact sheet at the end.
+set -euo pipefail
+
+KEY="${1:?usage: d70-sweep <config-key> <value> [value…]}"; shift
+(( $# > 0 )) || { echo "Give at least one value to sweep."; exit 1; }
+
+ROOT="${D70_ROOT:-$HOME/Pictures/D70}"
+DEST="$ROOT/sweep/${KEY}-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$DEST"
+
+command -v gphoto2 >/dev/null || { echo "gphoto2 not installed — run ./bin/d70-setup"; exit 1; }
+source "$(dirname "$0")/_d70lib.sh"
+d70_free
+
+ORIG=$(d70_gp --get-config "$KEY" 2>/dev/null | awk -F': ' '/^Current/{print $2}')
+echo "Sweeping $KEY across $# values (was: ${ORIG:-unknown})"
+echo "Folder: $DEST"
+echo
+
+for v in "$@"; do
+  safe=$(printf '%s' "$v" | tr -c 'A-Za-z0-9._-' '-')
+  printf '  %-14s ' "$v"
+  if d70_gp --set-config "$KEY=$v" >/dev/null 2>&1; then
+    d70_gp --capture-image-and-download \
+            --filename "$DEST/${KEY}-${safe}.%C" --force-overwrite >/dev/null 2>&1 \
+      && echo "captured" || echo "capture FAILED"
+  else
+    echo "rejected by camera"
+  fi
+done
+
+[[ -n "${ORIG:-}" ]] && d70_gp --set-config "$KEY=$ORIG" >/dev/null 2>&1 || true
+
+if command -v magick >/dev/null; then
+  shopt -s nullglob nocaseglob
+  SHOTS=( "$DEST"/*.jpg )
+  shopt -u nocaseglob
+  if (( ${#SHOTS[@]} > 0 )); then
+    magick montage -label '%t' "${SHOTS[@]}" \
+      -tile 4x -geometry 640x+8+8 -background '#1a1c19' -fill '#dfe1d9' \
+      "$DEST/_contactsheet.jpg"
+    echo
+    echo "Contact sheet: $DEST/_contactsheet.jpg"
+  fi
+fi

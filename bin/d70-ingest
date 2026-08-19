@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# d70-ingest — copy a card into a dated library, never moving the originals.
+#
+#   ./bin/d70-ingest                      # auto-find /Volumes/NIKON_D70 or a CF reader
+#   ./bin/d70-ingest /Volumes/UNTITLED
+#
+# Result:  ~/Pictures/D70/library/2026/2026-08-18/20260818-143022_DSC_0431.NEF
+#
+# The camera's own DSC_nnnn number survives in the name, so a file on the Mac
+# still maps back to what the camera's playback screen showed.
+set -euo pipefail
+
+ROOT="${D70_ROOT:-$HOME/Pictures/D70}"
+DEST="$ROOT/library"
+
+SRC="${1:-}"
+if [[ -z "$SRC" ]]; then
+  for v in /Volumes/NIKON_D70 /Volumes/*; do
+    [[ -d "$v/DCIM" ]] && { SRC="$v"; break; }
+  done
+fi
+[[ -n "$SRC" && -d "$SRC" ]] || { echo "No card found. Pass a path, or mount the card."; exit 1; }
+
+command -v exiftool >/dev/null || { echo "exiftool not installed — run ./bin/d70-setup"; exit 1; }
+
+echo "From : $SRC"
+echo "To   : $DEST"
+echo
+
+mkdir -p "$DEST"
+
+# -o . makes exiftool COPY rather than move. Originals stay on the card.
+exiftool -r -progress \
+  -o . \
+  '-Directory<CreateDate' \
+  -d "$DEST/%Y/%Y-%m-%d" \
+  -ext NEF -ext JPG \
+  "$SRC/DCIM"
+
+# Prefix each file with its capture timestamp; %-c disambiguates collisions.
+exiftool -r -q \
+  '-FileName<${CreateDate}_%f%-c.%e' \
+  -d "%Y%m%d-%H%M%S" \
+  "$DEST"
+
+echo
+echo "==> This card's take"
+exiftool -r -q -q \
+  -p '$CreateDate  $ExposureTime  f$FNumber  ISO$ISO  $FocalLength  $Comment' \
+  -d "%H:%M:%S" "$SRC/DCIM" 2>/dev/null | tail -20
+echo
+echo "Card NOT erased. Format it in-camera (hold the two red FORMAT buttons 2s) once you have verified the copy."

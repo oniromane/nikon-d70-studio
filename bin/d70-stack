@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# d70-stack — combine a burst into one frame.
+#
+#   ./bin/d70-stack focus  ~/Pictures/D70/library/2026/2026-08-18   # macro focus stack
+#   ./bin/d70-stack expo   <dir>                                    # HDR / bracket blend
+#   ./bin/d70-stack trails <dir>                                    # star trails, lighten blend
+#   ./bin/d70-stack noise  <dir>                                    # average N frames, kill noise
+#
+# focus/expo need Hugin's align_image_stack and enfuse:
+#   brew install --cask hugin        (deprecated upstream but still installs)
+# This script adds /Applications/Hugin/tools_mac to PATH itself.
+#
+# The binaries are unsigned x86_64 and run under Rosetta 2. macOS SIGKILLs the
+# very first execution of each (exit 137, no output); run it again and it works.
+set -euo pipefail
+
+MODE="${1:?usage: d70-stack <focus|expo|trails|noise> <dir>}"
+DIR="${2:?usage: d70-stack <focus|expo|trails|noise> <dir>}"
+cd "$DIR"
+
+# Hugin's CLI lives inside the app bundle, not on the default PATH.
+[ -d /Applications/Hugin/tools_mac ] && PATH="$PATH:/Applications/Hugin/tools_mac"
+
+shopt -s nullglob nocaseglob
+ALL=( *.tif *.tiff *.jpg *.jpeg )
+shopt -u nocaseglob
+
+# Skip our own outputs and intermediates, or a second run stacks its own results.
+IMGS=()
+for f in "${ALL[@]}"; do
+  case "$f" in
+    as_*|stacked-*|stacked.*|onion.*) continue ;;
+  esac
+  IMGS+=( "$f" )
+done
+
+(( ${#IMGS[@]} > 1 )) || { echo "Need 2+ TIFF/JPEG frames in $DIR (develop NEFs first)."; exit 1; }
+echo "${#IMGS[@]} frames:"
+printf '  %s\n' "${IMGS[@]}"
+
+case "$MODE" in
+  focus)
+    # Hand-racked focus steps shift magnification slightly — align before merging.
+    align_image_stack -a as_ -m -i -C "${IMGS[@]}"
+    enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 \
+           --hard-mask -o stacked-focus.tif as_*.tif
+    rm -f as_*.tif
+    echo "-> $DIR/stacked-focus.tif"
+    ;;
+  expo)
+    align_image_stack -a as_ -C "${IMGS[@]}"
+    enfuse -o stacked-expo.tif as_*.tif
+    rm -f as_*.tif
+    echo "-> $DIR/stacked-expo.tif"
+    ;;
+  trails)
+    # Lighten-blend: every pixel keeps its brightest value across the whole run.
+    # 120 x 30s frames become one 60-minute trail with no thermal-noise penalty.
+    magick "${IMGS[@]}" -evaluate-sequence max stacked-trails.tif
+    echo "-> $DIR/stacked-trails.tif"
+    ;;
+  noise)
+    # Mean of N identical frames: noise falls by sqrt(N). Eight ISO 1600 frames
+    # land somewhere near a single clean ISO 200 exposure.
+    magick "${IMGS[@]}" -evaluate-sequence mean stacked-clean.tif
+    echo "-> $DIR/stacked-clean.tif"
+    ;;
+  *) echo "unknown mode: $MODE"; exit 1 ;;
+esac

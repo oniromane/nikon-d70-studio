@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# d70-timestrip — collapse a whole interval sequence into one image.
+#
+#   ./bin/d70-timestrip ~/Pictures/D70/interval/sunset            # vertical slice per frame
+#   ./bin/d70-timestrip ~/Pictures/D70/interval/sunset 8          # 8px per frame
+#   ./bin/d70-timestrip ~/Pictures/D70/interval/sunset 8 rows     # horizontal bands instead
+#
+# Takes the same narrow slice out of the centre of every frame and lays them
+# side by side. A day of sky becomes one gradient; a tide becomes a waveform;
+# a street becomes a barcode of the light that fell on it.
+set -euo pipefail
+
+DIR="${1:?usage: d70-timestrip <folder> [slice-px] [cols|rows]}"
+W="${2:-4}"
+AXIS="${3:-cols}"
+
+command -v magick >/dev/null || { echo "ImageMagick not installed — brew install imagemagick"; exit 1; }
+
+shopt -s nullglob nocaseglob
+FRAMES=( "$DIR"/*.jpg )
+shopt -u nocaseglob
+(( ${#FRAMES[@]} > 1 )) || { echo "Need 2+ JPEGs in $DIR."; exit 1; }
+
+read -r IW IH <<<"$(magick identify -format "%w %h" "${FRAMES[0]}")"
+OUT="$DIR/../$(basename "$DIR")-timestrip.png"
+
+if [[ "$AXIS" == "rows" ]]; then
+  Y=$(( (IH - W) / 2 ))
+  echo "${#FRAMES[@]} frames · ${IW}x${W} band at y=$Y · stacking vertically"
+  magick "${FRAMES[@]}" -crop "${IW}x${W}+0+${Y}" +repage -append "$OUT"
+else
+  X=$(( (IW - W) / 2 ))
+  echo "${#FRAMES[@]} frames · ${W}x${IH} slice at x=$X · appending horizontally"
+  magick "${FRAMES[@]}" -crop "${W}x${IH}+${X}+0" +repage +append "$OUT"
+fi
+
+echo "Wrote $OUT"

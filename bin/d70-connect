@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# d70-connect — free the camera from macOS and confirm gphoto2 can talk to it.
+#
+# macOS runs /usr/libexec/ptpcamerad (LaunchAgent com.apple.ptpcamerad) which
+# grabs any PTP camera the instant it appears. gphoto2 then fails with
+# "Could not claim the USB device". Killing it hands the device back.
+set -euo pipefail
+
+command -v gphoto2 >/dev/null || { echo "gphoto2 not installed — run ./bin/d70-setup"; exit 1; }
+
+echo "==> Releasing macOS PTP daemon"
+source "$(dirname "$0")/_d70lib.sh"
+d70_free
+
+echo
+echo "==> Detecting"
+if ! d70_gp --auto-detect | grep -qi "d70"; then
+  cat <<'EOF'
+   No D70 found. Checklist:
+     - Camera ON, battery charged (or EH-5 AC adapter connected)
+     - SETUP MENU > USB  ->  PTP        (Mass Storage will NOT allow control)
+     - UC-E4 cable straight into the Mac — no hub, no keyboard port
+     - Control panel should read  PC
+EOF
+  exit 1
+fi
+
+d70_gp --auto-detect
+echo
+echo "==> Summary"
+d70_gp --summary | sed -n '1,20p'
+echo
+echo "==> Capture supported?"
+d70_gp --abilities | grep -iE "capture|model"

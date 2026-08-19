@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# d70-normalmap — photometric stereo. Four flash positions become a normal map.
+#
+#   ./bin/d70-normalmap left.jpg right.jpg top.jpg bottom.jpg [out.png]
+#
+# CAPTURE PROTOCOL
+#   Camera fixed on a copy stand, subject flat, mode M, f/8, ISO 200,
+#   manual focus, one flash on a cord or in Commander mode.
+#   Take four frames with the flash at ~45 degrees from LEFT, RIGHT, TOP, BOTTOM.
+#   Nothing may move between frames — use d70-tether so you never touch the body.
+#   Shoot a fifth frame with flat frontal light: that is your albedo/colour map.
+#
+# The maths is the classic two-axis approximation:
+#   X = (right - left)/2 + 0.5      Y = (top - bottom)/2 + 0.5      Z = 1
+# Good enough for surface relief in Blender — paper grain, fabric, bark, stone,
+# tooling marks, leather, PCB silkscreen. Not a metrology-grade result.
+set -euo pipefail
+
+L="${1:?usage: d70-normalmap <left> <right> <top> <bottom> [out.png]}"
+R="${2:?}"; T="${3:?}"; B="${4:?}"
+OUT="${5:-normal.png}"
+
+command -v magick >/dev/null || { echo "ImageMagick not installed — brew install imagemagick"; exit 1; }
+for f in "$L" "$R" "$T" "$B"; do [[ -f "$f" ]] || { echo "missing: $f"; exit 1; }; done
+
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+# compose:args = A,B,C,D  ->  A*Src*Dst + B*Src + C*Dst + D
+# With "magick DST SRC -composite", the FIRST image is the destination.
+# X channel: 0.5*right - 0.5*left + 0.5   ->  DST=right, SRC=left, B=-0.5, C=0.5, D=0.5
+magick "$R" "$L" -colorspace gray -compose mathematics \
+       -define compose:args='0,-0.5,0.5,0.5' -composite "$TMP/nx.png"
+magick "$T" "$B" -colorspace gray -compose mathematics \
+       -define compose:args='0,-0.5,0.5,0.5' -composite "$TMP/ny.png"
+
+magick "$TMP/nx.png" "$TMP/ny.png" \
+       \( -clone 0 -evaluate set 100% \) \
+       -combine -colorspace sRGB "$OUT"
+
+echo "Wrote $OUT"
+echo "In Blender: Image Texture -> Non-Color -> Normal Map node -> Principled BSDF Normal."

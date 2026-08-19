@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# d70-tether — shoot with the camera's own shutter button; frames land on the Mac.
+#
+#   ./bin/d70-tether                 # session named by timestamp
+#   ./bin/d70-tether ceramics-vase   # named session
+#   D70_ROOT=~/Shoots ./bin/d70-tether
+set -euo pipefail
+
+SESSION="${1:-$(date +%Y%m%d-%H%M%S)}"
+ROOT="${D70_ROOT:-$HOME/Pictures/D70}"
+DEST="$ROOT/tether/$SESSION"
+mkdir -p "$DEST"
+
+command -v gphoto2 >/dev/null || { echo "gphoto2 not installed — run ./bin/d70-setup"; exit 1; }
+source "$(dirname "$0")/_d70lib.sh"
+d70_free
+
+echo "Session : $SESSION"
+echo "Folder  : $DEST"
+echo "Shoot with the camera. Ctrl-C to end."
+echo
+
+# --capture-tethered waits for the camera's ObjectAdded event and pulls each
+# frame as it is written. Files stay on the CF card too (nothing is deleted).
+d70_gp --capture-tethered --filename "$DEST/%Y%m%d_%H%M%S_%f.%C" || {
+  echo
+  echo "Event mode failed — falling back to event polling."
+  d70_gp --wait-event-and-download --filename "$DEST/%Y%m%d_%H%M%S_%f.%C"
+}

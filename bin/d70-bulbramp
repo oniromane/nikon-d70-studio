@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# d70-bulbramp — the "holy grail" day-to-night time-lapse the D70 cannot do alone.
+#
+#   ./bin/d70-bulbramp 240 sunset          # 240 frames, ramping across the whole run
+#   ./bin/d70-bulbramp 240 sunset 12 45    # ramp from choice index 12 to index 45
+#
+# The camera stays in M at a fixed aperture. This script walks the shutter speed
+# down its own list of accepted values, one notch every few frames, so exposure
+# tracks the falling light instead of stepping off a cliff at dusk.
+#
+# Read the shutter list the body actually reports first:
+#     d70_gp --get-config shutterspeed
+set -euo pipefail
+
+FRAMES="${1:?usage: d70-bulbramp <frames> [name] [startIndex] [endIndex]}"
+NAME="${2:-$(date +%Y%m%d-%H%M%S)}"
+ROOT="${D70_ROOT:-$HOME/Pictures/D70}"
+DEST="$ROOT/bulbramp/$NAME"
+mkdir -p "$DEST"
+
+command -v gphoto2 >/dev/null || { echo "gphoto2 not installed — run ./bin/d70-setup"; exit 1; }
+source "$(dirname "$0")/_d70lib.sh"
+d70_free
+
+# Read the shutter-speed choices straight off the camera — they differ by firmware.
+CHOICES=()
+while IFS= read -r line; do CHOICES+=("$line"); done < <(
+  d70_gp --get-config shutterspeed 2>/dev/null | sed -n 's/^Choice: [0-9][0-9]* //p'
+)
+N=${#CHOICES[@]}
+(( N > 1 )) || { echo "Camera reported no shutterspeed choices. Is the mode dial on M?"; exit 1; }
+
+START="${3:-0}"
+END="${4:-$((N-1))}"
+(( START>=0 && START<N && END>=0 && END<N )) || { echo "Index out of range 0..$((N-1))"; exit 1; }
+
+cat <<EOF
+Shutter choices reported : $N   (index 0 = "${CHOICES[0]}", index $((N-1)) = "${CHOICES[N-1]}")
+Ramping index $START -> $END over $FRAMES frames
+Folder : $DEST
+
+Set the camera to M, fix the aperture, manual focus, fixed white balance,
+Long exp. NR OFF, and run it on the EH-5. Ctrl-C aborts cleanly.
+
+EOF
+
+for ((i=0; i<FRAMES; i++)); do
+  idx=$(( START + ( (END - START) * i ) / (FRAMES > 1 ? FRAMES-1 : 1) ))
+  sp="${CHOICES[$idx]}"
+  printf '[%4d/%d] %-10s ' "$((i+1))" "$FRAMES" "$sp"
+  d70_gp --set-config shutterspeed="$sp" >/dev/null 2>&1 || true
+  d70_gp --capture-image-and-download \
+          --filename "$DEST/$(printf '%05d' "$i")_%H%M%S.%C" >/dev/null 2>&1 \
+    && echo "ok" || echo "FAILED"
+done
+
+echo
+echo "Done. Assemble with:  ./bin/d70-movie \"$DEST\" 24"

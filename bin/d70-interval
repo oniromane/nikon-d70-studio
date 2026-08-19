@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# d70-interval — the intervalometer the D70 never shipped with.
+#
+#   ./bin/d70-interval 10 360 sunset      # every 10s, 360 frames
+#   ./bin/d70-interval 300 288 balcony    # every 5min for 24h
+#
+# Then assemble:  ./bin/d70-movie ~/Pictures/D70/interval/sunset
+#
+# PLAN THE POWER. 360 frames of NEF will not survive on one EN-EL3.
+# Anything over ~200 frames wants the EH-5 AC adapter.
+set -euo pipefail
+
+SECS="${1:?usage: d70-interval <seconds> <frames> [name]}"
+FRAMES="${2:?usage: d70-interval <seconds> <frames> [name]}"
+NAME="${3:-$(date +%Y%m%d-%H%M%S)}"
+ROOT="${D70_ROOT:-$HOME/Pictures/D70}"
+DEST="$ROOT/interval/$NAME"
+mkdir -p "$DEST"
+
+command -v gphoto2 >/dev/null || { echo "gphoto2 not installed — run ./bin/d70-setup"; exit 1; }
+source "$(dirname "$0")/_d70lib.sh"
+d70_free
+
+MINS=$(( SECS * FRAMES / 60 ))
+cat <<EOF
+Interval : ${SECS}s x ${FRAMES} frames  (~${MINS} min run)
+Folder   : $DEST
+
+Camera checklist for a clean sequence:
+  Mode dial  M          — locks shutter AND aperture; P/A/S will pump brightness
+  Focus      M          — AF will hunt and shift framing between frames
+  White bal. NOT Auto   — Auto WB drifts frame to frame; pick Direct sunlight/Cloudy
+  Optimize   Custom     — Sharpening and Tone comp. set to a fixed value, not Auto
+  Long exp NR OFF       — it doubles the cycle time and punches gaps in the sequence
+  Image rev. OFF        — CSM 7, saves battery and screen wear
+
+EOF
+
+gphoto2 --interval "$SECS" --frames "$FRAMES" \
+        --capture-image-and-download \
+        --filename "$DEST/%Y%m%d_%H%M%S_%n.%C"
+
+echo
+echo "Done. $(ls -1 "$DEST" | wc -l | tr -d ' ') files in $DEST"
